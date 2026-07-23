@@ -8,6 +8,7 @@ def get_connection():
 
 def init_db():
     with get_connection() as conn:
+        # Таблица заявок (добавлено поле rejected_reason)
         conn.execute("""
             CREATE TABLE IF NOT EXISTS applications (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -25,15 +26,19 @@ def init_db():
                 sbp_amount TEXT,
                 cancel_reason TEXT,
                 sbp_requisites TEXT,
-                code_requests_count INTEGER DEFAULT 0
+                code_requests_count INTEGER DEFAULT 0,
+                rejected_reason TEXT
             )
         """)
+        # Таблица пользователей (добавлен banned)
         conn.execute("""
             CREATE TABLE IF NOT EXISTS users (
                 user_id INTEGER PRIMARY KEY,
                 username TEXT,
                 first_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                banned BOOLEAN DEFAULT 0,
+                ban_reason TEXT
             )
         """)
         conn.execute("""
@@ -57,66 +62,48 @@ def add_user(user_id: int, username: str = None):
             (username, user_id)
         )
 
-def get_all_users() -> List[int]:
+def is_user_banned(user_id: int) -> bool:
     with get_connection() as conn:
-        rows = conn.execute("SELECT user_id FROM users").fetchall()
-        return [row[0] for row in rows]
+        row = conn.execute("SELECT banned FROM users WHERE user_id = ?", (user_id,)).fetchone()
+        return bool(row[0]) if row else False
 
-def create_application(user_id: int, username: str, phone: Optional[str], service_type: str, type_choice: str) -> int:
+def get_ban_reason(user_id: int) -> Optional[str]:
     with get_connection() as conn:
-        cursor = conn.execute(
-            "INSERT INTO applications (user_id, username, phone, service_type, type_choice, status, code_requests_count) "
-            "VALUES (?, ?, ?, ?, ?, 'waiting', 0)",
-            (user_id, username, phone, service_type, type_choice)
-        )
-        return cursor.lastrowid
+        row = conn.execute("SELECT ban_reason FROM users WHERE user_id = ?", (user_id,)).fetchone()
+        return row[0] if row else None
 
-def update_app(app_id: int, **kwargs):
-    fields = []
-    values = []
-    for key, value in kwargs.items():
-        fields.append(f"{key} = ?")
-        values.append(value)
-    values.append(app_id)
-    if not fields:
-        return
+def ban_user(user_id: int, reason: str = None):
     with get_connection() as conn:
         conn.execute(
-            f"UPDATE applications SET updated_at = CURRENT_TIMESTAMP, {', '.join(fields)} WHERE id = ?",
-            values
+            "UPDATE users SET banned = 1, ban_reason = ? WHERE user_id = ?",
+            (reason, user_id)
         )
 
-def get_app(app_id: int) -> Optional[Dict]:
+def unban_user(user_id: int):
+    with get_connection() as conn:
+        conn.execute(
+            "UPDATE users SET banned = 0, ban_reason = NULL WHERE user_id = ?",
+            (user_id,)
+        )
+
+def get_all_users_with_status() -> List[Dict]:
     with get_connection() as conn:
         conn.row_factory = sqlite3.Row
-        row = conn.execute("SELECT * FROM applications WHERE id = ?", (app_id,)).fetchone()
-        return dict(row) if row else None
+        rows = conn.execute("SELECT user_id, username, banned, ban_reason FROM users ORDER BY user_id").fetchall()
+        return [dict(row) for row in rows]
 
-def get_apps(limit: int = 20) -> List[Dict]:
+def reject_application(app_id: int, reason: str):
+    with get_connection() as conn:
+        conn.execute(
+            "UPDATE applications SET status = 'rejected', rejected_reason = ? WHERE id = ?",
+            (reason, app_id)
+        )
+
+def get_apps_by_status(status: str, limit: int = 20) -> List[Dict]:
     with get_connection() as conn:
         conn.row_factory = sqlite3.Row
         rows = conn.execute(
-            "SELECT * FROM applications ORDER BY created_at DESC LIMIT ?",
-            (limit,)
+            "SELECT * FROM applications WHERE status = ? ORDER BY created_at DESC LIMIT ?",
+            (status, limit)
         ).fetchall()
         return [dict(row) for row in rows]
-
-def get_stats() -> Dict:
-    with get_connection() as conn:
-        total = conn.execute("SELECT COUNT(*) FROM applications").fetchone()[0]
-        waiting = conn.execute("SELECT COUNT(*) FROM applications WHERE status = 'waiting'").fetchone()[0]
-        completed = conn.execute("SELECT COUNT(*) FROM applications WHERE status = 'completed'").fetchone()[0]
-        cancelled = conn.execute("SELECT COUNT(*) FROM applications WHERE status = 'cancelled'").fetchone()[0]
-        sdat = conn.execute("SELECT COUNT(*) FROM applications WHERE service_type = 'sdat'").fetchone()[0]
-        sbp = conn.execute("SELECT COUNT(*) FROM applications WHERE service_type = 'sbp'").fetchone()[0]
-        return {
-            "total": total,
-            "waiting": waiting,
-            "completed": completed,
-            "cancelled": cancelled,
-            "sdat": sdat,
-            "sbp": sbp
-        }
-
-# Инициализация БД при импорте
-init_db()
