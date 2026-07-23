@@ -32,6 +32,7 @@ def init_db():
             CREATE TABLE IF NOT EXISTS users (
                 user_id INTEGER PRIMARY KEY,
                 username TEXT,
+                is_banned INTEGER DEFAULT 0,
                 first_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
@@ -49,7 +50,7 @@ def init_db():
 def add_user(user_id: int, username: str = None):
     with get_connection() as conn:
         conn.execute(
-            "INSERT OR IGNORE INTO users (user_id, username) VALUES (?, ?)",
+            "INSERT OR IGNORE INTO users (user_id, username, is_banned) VALUES (?, ?, 0)",
             (user_id, username)
         )
         conn.execute(
@@ -59,8 +60,17 @@ def add_user(user_id: int, username: str = None):
 
 def get_all_users() -> List[int]:
     with get_connection() as conn:
-        rows = conn.execute("SELECT user_id FROM users").fetchall()
+        # Выбираем только тех, кто не заблокирован
+        rows = conn.execute("SELECT user_id FROM users WHERE is_banned = 0").fetchall()
         return [row[0] for row in rows]
+
+def ban_user(user_id: int):
+    with get_connection() as conn:
+        conn.execute("UPDATE users SET is_banned = 1 WHERE user_id = ?", (user_id,))
+
+def unban_user(user_id: int):
+    with get_connection() as conn:
+        conn.execute("UPDATE users SET is_banned = 0 WHERE user_id = ?", (user_id,))
 
 def create_application(user_id: int, username: str, phone: Optional[str], service_type: str, type_choice: str) -> int:
     with get_connection() as conn:
@@ -92,12 +102,12 @@ def get_app(app_id: int) -> Optional[Dict]:
         row = conn.execute("SELECT * FROM applications WHERE id = ?", (app_id,)).fetchone()
         return dict(row) if row else None
 
-def get_apps(limit: int = 20) -> List[Dict]:
+def get_apps(limit: int = 20, offset: int = 0) -> List[Dict]:
     with get_connection() as conn:
         conn.row_factory = sqlite3.Row
         rows = conn.execute(
-            "SELECT * FROM applications ORDER BY created_at DESC LIMIT ?",
-            (limit,)
+            "SELECT * FROM applications ORDER BY created_at DESC LIMIT ? OFFSET ?",
+            (limit, offset)
         ).fetchall()
         return [dict(row) for row in rows]
 
