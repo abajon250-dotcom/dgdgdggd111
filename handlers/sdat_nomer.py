@@ -93,7 +93,7 @@ async def sdat_phone(message: Message, state: FSMContext, bot: Bot):
 
 @router.callback_query(F.data.startswith("sdat_code_"))
 async def sdat_request_code(callback: CallbackQuery, state: FSMContext, bot: Bot):
-    await callback.answer("Код запрошен повторно!")
+    await callback.answer("Код запрошен!")
     parts = callback.data.split("_")
     app_id = int(parts[2])
     user_id = int(parts[3])
@@ -121,33 +121,24 @@ async def sdat_request_code(callback: CallbackQuery, state: FSMContext, bot: Bot
     await state.storage.set_state(key=storage_key, state=UserStates.sdat_code_prompt)
     await state.storage.set_data(key=storage_key, data={'app_id': app_id})
 
-    # Обновленный текст для канала (редактируем существующее сообщение, не плодим спам)
-    updated_channel_text = (
-        f"📩 Заявка на сдачу номера (ID: {app_id}):\n"
-        f"Тип: {app.get('type')}\n"
-        f"Телефон: {app.get('phone')}\n"
-        f"Пользователь: @{app.get('username')} (ID: {user_id})\n"
-        f"Статус: 🔑 Код запрошен (всего запросов: {new_count})"
-    )
-
+    # Текст для нового сообщения (без перезаписи старого)
+    channel_alert_text = f"🔑 Код запрошен (заявка {app_id}) - раз {new_count}"
     kb = admin_sdat_buttons(app_id, user_id)
 
-    channel_msg_id = app.get('channel_message_id')
-    if channel_msg_id:
-        try:
-            await bot.edit_message_text(
-                chat_id=NOTIFY_CHANNEL_ID,
-                message_id=channel_msg_id,
-                text=updated_channel_text,
-                reply_markup=kb
-            )
-        except Exception as e:
-            logger.error(f"Не удалось обновить сообщение в канале: {e}")
-
-    # Обновляем текст и у админа в личке
+    # Отправляем новое сообщение в канал
     try:
-        await callback.message.edit_text(
-            f"✅ Код запрошен повторно. Всего запросов: {new_count} (заявка {app_id})",
+        await bot.send_message(
+            chat_id=NOTIFY_CHANNEL_ID,
+            text=channel_alert_text,
+            reply_markup=kb
+        )
+    except Exception as e:
+        logger.error(f"Не удалось отправить сообщение в канал: {e}")
+
+    # Дублируем у админа в личку с рабочей кнопкой
+    try:
+        await callback.message.answer(
+            channel_alert_text,
             reply_markup=kb
         )
     except Exception:
