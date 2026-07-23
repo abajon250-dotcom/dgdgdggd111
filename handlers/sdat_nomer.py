@@ -75,7 +75,6 @@ async def sdat_phone(message: Message, state: FSMContext, bot: Bot):
     kb = admin_sdat_buttons(app_id, user_id)
     admin_msg = await bot.send_message(ADMIN_ID, app_text, reply_markup=kb)
 
-    # Отправляем сообщение в канал. Оно НЕ БУДЕТ РЕДАКТИРОВАТЬСЯ.
     try:
         channel_msg = await bot.send_message(NOTIFY_CHANNEL_ID, app_text, reply_markup=kb)
         ch_id = channel_msg.message_id
@@ -88,8 +87,6 @@ async def sdat_phone(message: Message, state: FSMContext, bot: Bot):
     await state.set_state(UserStates.sdat_waiting_admin)
     await message.answer("✅ Данные отправлены администратору. Ожидайте.", reply_markup=main_menu())
 
-
-# ---------- Действия админа ----------
 
 @router.callback_query(F.data.startswith("sdat_code_"))
 async def sdat_request_code(callback: CallbackQuery, state: FSMContext, bot: Bot):
@@ -106,29 +103,24 @@ async def sdat_request_code(callback: CallbackQuery, state: FSMContext, bot: Bot
         await callback.message.answer("❌ Заявка отменена.")
         return
 
-    # Увеличиваем счётчик запросов кода
     new_count = app.get('code_requests_count', 0) + 1
     update_app(app_id, code_requests_count=new_count)
 
-    # Отправляем пользователю НОВОЕ сообщение с кнопкой "Ввести код"
     await bot.send_message(
         user_id,
         f"🔑 Код запрошен (заявка {app_id}). Нажмите «Ввести код».",
         reply_markup=user_code_prompt()
     )
 
-    # Сохраняем состояние пользователя
     storage_key = StorageKey(bot.id, user_id, user_id)
     await state.storage.set_state(key=storage_key, state=UserStates.sdat_code_prompt)
     await state.storage.set_data(key=storage_key, data={'app_id': app_id})
 
-    # Отправляем НОВОЕ уведомление в канал (не редактируем исходное)
     await bot.send_message(
         NOTIFY_CHANNEL_ID,
         f"🔑 Код запрошен (заявка {app_id}) - раз {new_count}"
     )
 
-    # Обновляем сообщение у админа (в личке)
     await callback.message.edit_text(f"✅ Код запрошен (заявка {app_id}) - раз {new_count}")
 
 
@@ -142,35 +134,6 @@ async def sdat_admin_cancel(callback: CallbackQuery, state: FSMContext):
     await state.update_data(cancel_app_id=app_id, cancel_user_id=user_id)
     await callback.message.answer("Введите причину отмены:")
 
-
-# ---------- Общая отмена ----------
-
-@router.message(AdminStates.waiting_cancel_reason)
-async def admin_cancel_reason(message: Message, state: FSMContext, bot: Bot):
-    reason = message.text
-    data = await state.get_data()
-    app_id = data.get('cancel_app_id')
-    user_id = data.get('cancel_user_id')
-    if not app_id or not user_id:
-        await message.answer("Ошибка. Попробуйте снова.")
-        await state.clear()
-        return
-
-    app = get_app(app_id)
-    update_app(app_id, status='cancelled', cancel_reason=reason)
-
-    await bot.send_message(user_id, f"❌ Ваша заявка (ID: {app_id}) отменена.\nПричина: {reason}")
-    await bot.send_message(NOTIFY_CHANNEL_ID, f"❌ Отменено (заявка {app_id}). Причина: {reason}")
-
-    storage_key = StorageKey(bot.id, user_id, user_id)
-    await state.storage.set_state(key=storage_key, state=None)
-    await state.storage.set_data(key=storage_key, data={})
-
-    await state.clear()
-    await message.answer("✅ Отмена выполнена.")
-
-
-# ---------- Пользователь вводит код ----------
 
 @router.callback_query(F.data == "user_enter_code", UserStates.sdat_code_prompt)
 async def user_enter_code(callback: CallbackQuery, state: FSMContext):

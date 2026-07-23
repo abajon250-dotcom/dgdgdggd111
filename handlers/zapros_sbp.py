@@ -56,8 +56,6 @@ async def sbp_type_chosen(callback: CallbackQuery, state: FSMContext, bot: Bot):
     await callback.message.edit_text("✅ Данные отправлены администратору. Ожидайте.")
     await callback.message.answer("Меню:", reply_markup=main_menu())
 
-# ---------- Админ вводит реквизиты ----------
-
 @router.callback_query(F.data.startswith("sbp_req_"))
 async def sbp_admin_requisites(callback: CallbackQuery, state: FSMContext):
     await callback.answer()
@@ -111,8 +109,6 @@ async def sbp_requisites_sent(message: Message, state: FSMContext, bot: Bot):
     await state.clear()
     await message.answer("✅ Реквизиты отправлены пользователю.")
 
-# ---------- Пользователь нажимает "Я перевел(а)" ----------
-
 @router.callback_query(F.data.startswith("sbp_amount_"))
 async def sbp_user_amount_request(callback: CallbackQuery, state: FSMContext):
     await callback.answer()
@@ -161,8 +157,6 @@ async def sbp_user_amount_received(message: Message, state: FSMContext, bot: Bot
     await state.clear()
     await message.answer("✅ Сумма отправлена администратору на проверку.", reply_markup=main_menu())
 
-# ---------- Админ подтверждает выплату ----------
-
 @router.callback_query(F.data.startswith("sbp_confirm_"))
 async def sbp_admin_confirm(callback: CallbackQuery, state: FSMContext, bot: Bot):
     await callback.answer()
@@ -196,7 +190,6 @@ async def sbp_admin_confirm(callback: CallbackQuery, state: FSMContext, bot: Bot
 
     await callback.message.edit_text(f"✅ Выплата по заявке {app_id} подтверждена.")
 
-# Отмена подтверждения
 @router.callback_query(F.data.startswith("sbp_cancel_confirm_"))
 async def sbp_admin_cancel_confirm(callback: CallbackQuery, state: FSMContext):
     await callback.answer()
@@ -207,7 +200,6 @@ async def sbp_admin_cancel_confirm(callback: CallbackQuery, state: FSMContext):
     await state.update_data(cancel_app_id=app_id, cancel_user_id=user_id)
     await callback.message.answer("Введите причину отмены:")
 
-# Отмена на этапе реквизитов
 @router.callback_query(F.data.startswith("sbp_cancel_"))
 async def sbp_admin_cancel(callback: CallbackQuery, state: FSMContext):
     await callback.answer()
