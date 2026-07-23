@@ -16,7 +16,7 @@ from database import create_application, update_app, get_app, add_user
 router = Router()
 logger = logging.getLogger(__name__)
 
-@router.message(F.text == "Запросить СБП")
+@router.message(F.text == "💳 Запросить СБП")
 async def sbp_start(message: Message, state: FSMContext):
     if await state.get_state():
         await message.answer("Предыдущее действие отменено.", reply_markup=main_menu())

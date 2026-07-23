@@ -6,57 +6,66 @@ from aiogram.types import (
 )
 
 def main_menu() -> ReplyKeyboardMarkup:
+    """Главное меню с красивыми кнопками."""
     return ReplyKeyboardMarkup(
         keyboard=[
-            [KeyboardButton(text="Сдать номер")],
-            [KeyboardButton(text="Запросить СБП")]
+            [KeyboardButton(text="📱 Сдать номер")],
+            [KeyboardButton(text="💳 Запросить СБП")]
         ],
         resize_keyboard=True
     )
 
 def cancel_keyboard() -> ReplyKeyboardMarkup:
+    """Кнопка отмены с эмодзи."""
     return ReplyKeyboardMarkup(
-        keyboard=[[KeyboardButton(text="Отмена")]],
+        keyboard=[[KeyboardButton(text="❌ Отмена")]],
         resize_keyboard=True
     )
 
 def type_inline() -> InlineKeyboardMarkup:
+    """Выбор типа услуги."""
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="АДЕНЬГИ", callback_data="type_adengi")],
-        [InlineKeyboardButton(text="МАНИМЕН", callback_data="type_manimen")]
+        [InlineKeyboardButton(text="💎 АДЕНЬГИ", callback_data="type_adengi")],
+        [InlineKeyboardButton(text="🔥 МАНИМЕН", callback_data="type_manimen")]
     ])
 
 def admin_sdat_buttons(app_id: int, user_id: int) -> InlineKeyboardMarkup:
+    """Кнопки для админа при заявке на сдачу номера."""
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="Запросить код", callback_data=f"sdat_code_{app_id}_{user_id}")],
-        [InlineKeyboardButton(text="Отмена", callback_data=f"sdat_cancel_{app_id}_{user_id}")]
+        [InlineKeyboardButton(text="🔑 Запросить код", callback_data=f"sdat_code_{app_id}_{user_id}")],
+        [InlineKeyboardButton(text="🚫 Отмена", callback_data=f"sdat_cancel_{app_id}_{user_id}")]
     ])
 
 def admin_sbp_buttons(app_id: int, user_id: int) -> InlineKeyboardMarkup:
+    """Кнопки для админа при запросе СБП."""
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="Ввести реквизиты СБП", callback_data=f"sbp_req_{app_id}_{user_id}")],
-        [InlineKeyboardButton(text="Отмена", callback_data=f"sbp_cancel_{app_id}_{user_id}")]
+        [InlineKeyboardButton(text="💳 Ввести реквизиты СБП", callback_data=f"sbp_req_{app_id}_{user_id}")],
+        [InlineKeyboardButton(text="🚫 Отмена", callback_data=f"sbp_cancel_{app_id}_{user_id}")]
     ])
 
 def user_code_prompt() -> InlineKeyboardMarkup:
+    """Кнопки для пользователя после запроса кода."""
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="Ввести код", callback_data="user_enter_code")],
-        [InlineKeyboardButton(text="Отмена", callback_data="user_cancel")]
+        [InlineKeyboardButton(text="✏️ Ввести код", callback_data="user_enter_code")],
+        [InlineKeyboardButton(text="❌ Отмена", callback_data="user_cancel")]
     ])
 
 def user_sbp_amount_prompt(app_id: int) -> InlineKeyboardMarkup:
+    """Кнопка для пользователя после получения реквизитов."""
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="Я перевел(а) сумму", callback_data=f"sbp_amount_{app_id}")],
-        [InlineKeyboardButton(text="Отмена", callback_data="user_cancel")]
+        [InlineKeyboardButton(text="✅ Я перевел(а) сумму", callback_data=f"sbp_amount_{app_id}")],
+        [InlineKeyboardButton(text="❌ Отмена", callback_data="user_cancel")]
     ])
 
 def admin_sbp_confirm_buttons(app_id: int, user_id: int) -> InlineKeyboardMarkup:
+    """Кнопки для админа при подтверждении выплаты."""
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="Подтвердить выплату", callback_data=f"sbp_confirm_{app_id}_{user_id}")],
-        [InlineKeyboardButton(text="Отмена", callback_data=f"sbp_cancel_confirm_{app_id}_{user_id}")]
+        [InlineKeyboardButton(text="✅ Подтвердить выплату", callback_data=f"sbp_confirm_{app_id}_{user_id}")],
+        [InlineKeyboardButton(text="🚫 Отмена", callback_data=f"sbp_cancel_confirm_{app_id}_{user_id}")]
     ])
 
 def subscribe_check_keyboard(channel_id: str) -> InlineKeyboardMarkup:
+    """Кнопки для проверки подписки."""
     kb = []
     if channel_id.startswith('@'):
         kb.append([InlineKeyboardButton(text="🔗 Перейти в канал", url=f"https://t.me/{channel_id[1:]}")])
@@ -64,6 +73,7 @@ def subscribe_check_keyboard(channel_id: str) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=kb)
 
 def admin_panel() -> InlineKeyboardMarkup:
+    """Админ-панель."""
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="📊 Статистика", callback_data="admin_stats")],
         [InlineKeyboardButton(text="📋 Список заявок", callback_data="admin_list")],

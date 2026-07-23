@@ -25,7 +25,7 @@ def validate_phone(phone: str) -> bool:
     return bool(PHONE_RE.fullmatch(phone))
 
 
-@router.message(F.text == "Сдать номер")
+@router.message(F.text == "📱 Сдать номер")
 async def sdat_start(message: Message, state: FSMContext):
     if await state.get_state():
         await message.answer("Предыдущее действие отменено.", reply_markup=main_menu())
