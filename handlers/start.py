@@ -12,6 +12,18 @@ from database import add_user
 router = Router()
 logger = logging.getLogger(__name__)
 
+# Допустимые статусы участника канала (включая restricted для пользователей с ограничениями)
+VALID_STATUSES = ('member', 'administrator', 'creator', 'restricted')
+
+async def is_subscribed(bot: Bot, user_id: int) -> bool:
+    """Проверка наличия подписки пользователя на канал."""
+    try:
+        member = await bot.get_chat_member(chat_id=CHANNEL_ID, user_id=user_id)
+        return member.status in VALID_STATUSES
+    except Exception as e:
+        logger.error(f"Ошибка проверки подписки для пользователя {user_id}: {e}")
+        return False
+
 @router.message(Command("start"))
 async def cmd_start(message: Message, state: FSMContext, bot: Bot):
     await state.clear()
@@ -27,24 +39,22 @@ async def cmd_start(message: Message, state: FSMContext, bot: Bot):
         "Для начала работы подпишитесь на наш канал."
     )
     await message.answer(welcome)
-    await check_subscription(message, bot, state)
 
-async def check_subscription(message: Message, bot: Bot, state: FSMContext):
-    user_id = message.from_user.id
-    try:
-        member = await bot.get_chat_member(CHANNEL_ID, user_id)
-        if member.status in ('member', 'administrator', 'creator'):
-            await message.answer("Выберите действие:", reply_markup=main_menu())
-        else:
-            await message.answer(
-                "❌ Вы не подписаны на канал. Подпишитесь и нажмите «Проверить подписку».",
-                reply_markup=subscribe_check_keyboard(CHANNEL_ID)
-            )
-    except Exception as e:
-        logger.error(f"Ошибка проверки подписки: {e}")
-        await message.answer("⚠️ Не удалось проверить подписку. Попробуйте позже.")
+    if await is_subscribed(bot, user_id):
+        await message.answer("Выберите действие:", reply_markup=main_menu())
+    else:
+        await message.answer(
+            "❌ Вы не подписаны на канал. Подпишитесь и нажмите «Проверить подписку».",
+            reply_markup=subscribe_check_keyboard(CHANNEL_ID)
+        )
 
 @router.callback_query(F.data == "check_subscription")
 async def check_subscription_cb(callback: CallbackQuery, bot: Bot, state: FSMContext):
-    await callback.answer()
-    await check_subscription(callback.message, bot, state)
+    user_id = callback.from_user.id
+
+    if await is_subscribed(bot, user_id):
+        await callback.answer("✅ Подписка подтверждена!", show_alert=False)
+        await callback.message.delete()
+        await callback.message.answer("Выберите действие:", reply_markup=main_menu())
+    else:
+        await callback.answer("❌ Вы всё еще не подписаны на канал!", show_alert=True)
