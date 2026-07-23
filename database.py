@@ -14,9 +14,9 @@ def init_db():
                 user_id INTEGER NOT NULL,
                 username TEXT,
                 phone TEXT,
-                service_type TEXT NOT NULL,   -- 'sdat' или 'sbp'
+                service_type TEXT NOT NULL,
                 type_choice TEXT,
-                status TEXT DEFAULT 'waiting', -- waiting, code_requested, completed, cancelled, rejected
+                status TEXT DEFAULT 'waiting',
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 admin_message_id INTEGER,
@@ -33,8 +33,7 @@ def init_db():
                 user_id INTEGER PRIMARY KEY,
                 username TEXT,
                 first_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                is_banned INTEGER DEFAULT 0
+                last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
         conn.execute("""
@@ -57,19 +56,6 @@ def add_user(user_id: int, username: str = None):
             "UPDATE users SET last_seen = CURRENT_TIMESTAMP, username = COALESCE(?, username) WHERE user_id = ?",
             (username, user_id)
         )
-
-def is_user_banned(user_id: int) -> bool:
-    with get_connection() as conn:
-        row = conn.execute("SELECT is_banned FROM users WHERE user_id = ?", (user_id,)).fetchone()
-        return row is not None and row[0] == 1
-
-def ban_user(user_id: int):
-    with get_connection() as conn:
-        conn.execute("UPDATE users SET is_banned = 1 WHERE user_id = ?", (user_id,))
-
-def unban_user(user_id: int):
-    with get_connection() as conn:
-        conn.execute("UPDATE users SET is_banned = 0 WHERE user_id = ?", (user_id,))
 
 def get_all_users() -> List[int]:
     with get_connection() as conn:
@@ -121,7 +107,6 @@ def get_stats() -> Dict:
         waiting = conn.execute("SELECT COUNT(*) FROM applications WHERE status = 'waiting'").fetchone()[0]
         completed = conn.execute("SELECT COUNT(*) FROM applications WHERE status = 'completed'").fetchone()[0]
         cancelled = conn.execute("SELECT COUNT(*) FROM applications WHERE status = 'cancelled'").fetchone()[0]
-        rejected = conn.execute("SELECT COUNT(*) FROM applications WHERE status = 'rejected'").fetchone()[0]
         sdat = conn.execute("SELECT COUNT(*) FROM applications WHERE service_type = 'sdat'").fetchone()[0]
         sbp = conn.execute("SELECT COUNT(*) FROM applications WHERE service_type = 'sbp'").fetchone()[0]
         return {
@@ -129,7 +114,6 @@ def get_stats() -> Dict:
             "waiting": waiting,
             "completed": completed,
             "cancelled": cancelled,
-            "rejected": rejected,
             "sdat": sdat,
             "sbp": sbp
         }

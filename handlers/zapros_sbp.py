@@ -11,16 +11,13 @@ from keyboards import (
     type_inline, admin_sbp_buttons, user_sbp_amount_prompt,
     main_menu, admin_sbp_confirm_buttons, cancel_keyboard
 )
-from database import create_application, update_app, get_app, add_user, is_user_banned
+from database import create_application, update_app, get_app, add_user
 
 router = Router()
 logger = logging.getLogger(__name__)
 
 @router.message(F.text == "Запросить СБП")
 async def sbp_start(message: Message, state: FSMContext):
-    if is_user_banned(message.from_user.id):
-        await message.answer("⛔ Вы забанены.")
-        return
     if await state.get_state():
         await message.answer("Предыдущее действие отменено.", reply_markup=main_menu())
         await state.clear()
@@ -72,8 +69,8 @@ async def sbp_admin_requisites(callback: CallbackQuery, state: FSMContext):
     if not app:
         await callback.message.answer("❌ Заявка не найдена.")
         return
-    if app['status'] in ('completed', 'cancelled', 'rejected'):
-        await callback.message.answer("❌ Заявка уже завершена или отменена/отклонена.")
+    if app['status'] in ('completed', 'cancelled'):
+        await callback.message.answer("❌ Заявка уже завершена или отменена.")
         return
 
     await state.set_state(AdminStates.waiting_sbp_requisites)
@@ -196,22 +193,12 @@ async def sbp_admin_confirm(callback: CallbackQuery, state: FSMContext, bot: Bot
     storage_key = StorageKey(bot.id, user_id, user_id)
     await state.storage.set_state(key=storage_key, state=None)
     await state.storage.set_data(key=storage_key, data={})
+
     await callback.message.edit_text(f"✅ Выплата по заявке {app_id} подтверждена.")
 
-# ---------- Отказы и отмены для СБП ----------
-
-@router.callback_query(F.data.startswith("sbp_reject_"))
-async def sbp_admin_reject(callback: CallbackQuery, state: FSMContext):
-    await callback.answer()
-    parts = callback.data.split("_")
-    app_id = int(parts[2])
-    user_id = int(parts[3])
-    await state.set_state(AdminStates.waiting_reject_reason)
-    await state.update_data(reject_app_id=app_id, reject_user_id=user_id)
-    await callback.message.answer("Введите причину отказа:")
-
-@router.callback_query(F.data.startswith("sbp_cancel_"))
-async def sbp_admin_cancel(callback: CallbackQuery, state: FSMContext):
+# Отмена подтверждения
+@router.callback_query(F.data.startswith("sbp_cancel_confirm_"))
+async def sbp_admin_cancel_confirm(callback: CallbackQuery, state: FSMContext):
     await callback.answer()
     parts = callback.data.split("_")
     app_id = int(parts[2])
@@ -220,18 +207,9 @@ async def sbp_admin_cancel(callback: CallbackQuery, state: FSMContext):
     await state.update_data(cancel_app_id=app_id, cancel_user_id=user_id)
     await callback.message.answer("Введите причину отмены:")
 
-@router.callback_query(F.data.startswith("sbp_reject_confirm_"))
-async def sbp_admin_reject_confirm(callback: CallbackQuery, state: FSMContext):
-    await callback.answer()
-    parts = callback.data.split("_")
-    app_id = int(parts[2])
-    user_id = int(parts[3])
-    await state.set_state(AdminStates.waiting_reject_reason)
-    await state.update_data(reject_app_id=app_id, reject_user_id=user_id)
-    await callback.message.answer("Введите причину отказа:")
-
-@router.callback_query(F.data.startswith("sbp_cancel_confirm_"))
-async def sbp_admin_cancel_confirm(callback: CallbackQuery, state: FSMContext):
+# Отмена на этапе реквизитов
+@router.callback_query(F.data.startswith("sbp_cancel_"))
+async def sbp_admin_cancel(callback: CallbackQuery, state: FSMContext):
     await callback.answer()
     parts = callback.data.split("_")
     app_id = int(parts[2])

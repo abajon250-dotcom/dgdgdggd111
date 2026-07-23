@@ -6,11 +6,8 @@ from aiogram.fsm.context import FSMContext
 from aiogram import Bot
 
 from config import ADMIN_ID
-from database import (
-    get_stats, get_apps, get_app, get_all_users,
-    ban_user, unban_user, is_user_banned
-)
-from keyboards import main_menu, admin_panel, admin_users_menu
+from database import get_stats, get_apps, get_app, get_all_users
+from keyboards import main_menu, admin_panel
 from states import AdminStates
 
 router = Router()
@@ -31,7 +28,6 @@ async def admin_panel_cmd(message: Message):
         f"⏳ В ожидании: {stats['waiting']}\n"
         f"✅ Завершено: {stats['completed']}\n"
         f"❌ Отменено: {stats['cancelled']}\n"
-        f"🚫 Отклонено: {stats['rejected']}\n"
         f"📱 Сдать номер: {stats['sdat']}\n"
         f"💰 СБП: {stats['sbp']}"
     )
@@ -50,7 +46,6 @@ async def admin_stats_cb(callback: CallbackQuery):
         f"⏳ В ожидании: {stats['waiting']}\n"
         f"✅ Завершено: {stats['completed']}\n"
         f"❌ Отменено: {stats['cancelled']}\n"
-        f"🚫 Отклонено: {stats['rejected']}\n"
         f"📱 Сдать номер: {stats['sdat']}\n"
         f"💰 СБП: {stats['sbp']}"
     )
@@ -68,15 +63,7 @@ async def admin_list_cb(callback: CallbackQuery):
         return
     text = "📋 **Последние заявки:**\n\n"
     for app in apps:
-        emoji = {
-            'waiting':'⏳',
-            'code_requested':'🔑',
-            'requisites_sent':'💳',
-            'amount_reported':'💰',
-            'completed':'✅',
-            'cancelled':'❌',
-            'rejected':'🚫'
-        }.get(app['status'], '❓')
+        emoji = {'waiting':'⏳','code_requested':'🔑','requisites_sent':'💳','amount_reported':'💰','completed':'✅','cancelled':'❌'}.get(app['status'], '❓')
         text += f"{emoji} #{app['id']} | {app['service_type']} | {app['type_choice']} | {app['status']}\n"
     text += "\nДля деталей: /view <ID>"
     await callback.message.edit_text(text, reply_markup=admin_panel())
@@ -115,109 +102,8 @@ async def view_app_cmd(message: Message):
     if app['sbp_requisites']:
         text += f"💳 Реквизиты: {app['sbp_requisites']}\n"
     if app['cancel_reason']:
-        text += f"❌ Причина: {app['cancel_reason']}"
+        text += f"❌ Причина отмены: {app['cancel_reason']}"
     await message.answer(text)
-
-# ---------- Управление пользователями ----------
-
-@router.callback_query(F.data == "admin_users")
-async def admin_users_menu(callback: CallbackQuery):
-    if not is_admin(callback.from_user.id):
-        await callback.answer("Нет прав", show_alert=True)
-        return
-    await callback.answer()
-    await callback.message.edit_text(
-        "👥 **Управление пользователями**\nВыберите действие:",
-        reply_markup=admin_users_menu()
-    )
-
-@router.callback_query(F.data == "admin_ban")
-async def admin_ban_start(callback: CallbackQuery, state: FSMContext):
-    if not is_admin(callback.from_user.id):
-        await callback.answer("Нет прав", show_alert=True)
-        return
-    await callback.answer()
-    await state.set_state(AdminStates.waiting_ban_user)
-    await callback.message.edit_text(
-        "Введите ID пользователя для бана (число):\nДля отмены нажмите /cancel"
-    )
-
-@router.message(AdminStates.waiting_ban_user)
-async def admin_ban_user(message: Message, state: FSMContext):
-    if not is_admin(message.from_user.id):
-        await message.answer("⛔ Нет прав.")
-        await state.clear()
-        return
-    try:
-        user_id = int(message.text)
-    except ValueError:
-        await message.answer("❌ Введите число.")
-        return
-    if is_user_banned(user_id):
-        await message.answer("⚠️ Пользователь уже забанен.")
-    else:
-        ban_user(user_id)
-        await message.answer(f"✅ Пользователь с ID {user_id} забанен.")
-    await state.clear()
-    # Показать меню управления пользователями
-    await message.answer(
-        "👥 **Управление пользователями**\nВыберите действие:",
-        reply_markup=admin_users_menu()
-    )
-
-@router.callback_query(F.data == "admin_unban")
-async def admin_unban_start(callback: CallbackQuery, state: FSMContext):
-    if not is_admin(callback.from_user.id):
-        await callback.answer("Нет прав", show_alert=True)
-        return
-    await callback.answer()
-    await state.set_state(AdminStates.waiting_unban_user)
-    await callback.message.edit_text(
-        "Введите ID пользователя для разбана (число):\nДля отмены нажмите /cancel"
-    )
-
-@router.message(AdminStates.waiting_unban_user)
-async def admin_unban_user(message: Message, state: FSMContext):
-    if not is_admin(message.from_user.id):
-        await message.answer("⛔ Нет прав.")
-        await state.clear()
-        return
-    try:
-        user_id = int(message.text)
-    except ValueError:
-        await message.answer("❌ Введите число.")
-        return
-    if not is_user_banned(user_id):
-        await message.answer("⚠️ Пользователь не забанен.")
-    else:
-        unban_user(user_id)
-        await message.answer(f"✅ Пользователь с ID {user_id} разбанен.")
-    await state.clear()
-    await message.answer(
-        "👥 **Управление пользователями**\nВыберите действие:",
-        reply_markup=admin_users_menu()
-    )
-
-@router.callback_query(F.data == "admin_back")
-async def admin_back(callback: CallbackQuery):
-    if not is_admin(callback.from_user.id):
-        await callback.answer("Нет прав", show_alert=True)
-        return
-    await callback.answer()
-    stats = get_stats()
-    text = (
-        "📊 **Админ-панель**\n\n"
-        f"📌 Всего заявок: {stats['total']}\n"
-        f"⏳ В ожидании: {stats['waiting']}\n"
-        f"✅ Завершено: {stats['completed']}\n"
-        f"❌ Отменено: {stats['cancelled']}\n"
-        f"🚫 Отклонено: {stats['rejected']}\n"
-        f"📱 Сдать номер: {stats['sdat']}\n"
-        f"💰 СБП: {stats['sbp']}"
-    )
-    await callback.message.edit_text(text, reply_markup=admin_panel())
-
-# ---------- Рассылка ----------
 
 @router.callback_query(F.data == "admin_broadcast")
 async def admin_broadcast(callback: CallbackQuery, state: FSMContext):
@@ -259,7 +145,6 @@ async def broadcast_send(message: Message, state: FSMContext, bot: Bot):
         f"⏳ В ожидании: {stats['waiting']}\n"
         f"✅ Завершено: {stats['completed']}\n"
         f"❌ Отменено: {stats['cancelled']}\n"
-        f"🚫 Отклонено: {stats['rejected']}\n"
         f"📱 Сдать номер: {stats['sdat']}\n"
         f"💰 СБП: {stats['sbp']}"
     )

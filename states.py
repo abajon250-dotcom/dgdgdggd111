@@ -13,9 +13,6 @@ class UserStates(StatesGroup):
 
 class AdminStates(StatesGroup):
     waiting_cancel_reason = State()
-    waiting_reject_reason = State()
     waiting_sbp_requisites = State()
     waiting_sbp_confirm = State()
     waiting_broadcast = State()
-    waiting_ban_user = State()
-    waiting_unban_user = State()

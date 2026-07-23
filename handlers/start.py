@@ -7,7 +7,7 @@ from aiogram import Bot
 
 from config import CHANNEL_ID, ADMIN_ID
 from keyboards import main_menu, subscribe_check_keyboard
-from database import add_user, is_user_banned
+from database import add_user
 
 router = Router()
 logger = logging.getLogger(__name__)
@@ -18,10 +18,6 @@ async def cmd_start(message: Message, state: FSMContext, bot: Bot):
     user_id = message.from_user.id
     username = message.from_user.username or "нет username"
     add_user(user_id, username)
-
-    if is_user_banned(user_id):
-        await message.answer("⛔ Вы забанены и не можете пользоваться ботом.")
-        return
 
     welcome = (
         "✨ Добро пожаловать! ✨\n\n"
@@ -36,7 +32,7 @@ async def cmd_start(message: Message, state: FSMContext, bot: Bot):
 async def check_subscription(message: Message, bot: Bot, state: FSMContext):
     user_id = message.from_user.id
     try:
-        member = await bot.get_chat_member(chat_id=CHANNEL_ID, user_id=user_id)
+        member = await bot.get_chat_member(CHANNEL_ID, user_id)
         if member.status in ('member', 'administrator', 'creator'):
             await message.answer("Выберите действие:", reply_markup=main_menu())
         else:
