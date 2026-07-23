@@ -7,12 +7,12 @@ class UserStates(StatesGroup):
     sdat_code_prompt = State()
     sdat_waiting_code = State()
 
-    sbp_type = State()
+    sbp_requisites = State()
     sbp_waiting_admin = State()
-    sbp_waiting_amount = State()
+    sbp_waiting_amount_confirmation = State()
 
 class AdminStates(StatesGroup):
     waiting_cancel_reason = State()
-    waiting_sbp_requisites = State()
-    waiting_sbp_confirm = State()
     waiting_broadcast = State()
+    waiting_ban_id = State()
+    waiting_unban_id = State()
