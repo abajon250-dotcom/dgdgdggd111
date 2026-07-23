@@ -29,12 +29,14 @@ def type_inline() -> InlineKeyboardMarkup:
 def admin_sdat_buttons(app_id: int, user_id: int) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="Запросить код", callback_data=f"sdat_code_{app_id}_{user_id}")],
+        [InlineKeyboardButton(text="Отказать", callback_data=f"sdat_reject_{app_id}_{user_id}")],
         [InlineKeyboardButton(text="Отмена", callback_data=f"sdat_cancel_{app_id}_{user_id}")]
     ])
 
 def admin_sbp_buttons(app_id: int, user_id: int) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="Ввести реквизиты СБП", callback_data=f"sbp_req_{app_id}_{user_id}")],
+        [InlineKeyboardButton(text="Отказать", callback_data=f"sbp_reject_{app_id}_{user_id}")],
         [InlineKeyboardButton(text="Отмена", callback_data=f"sbp_cancel_{app_id}_{user_id}")]
     ])
 
@@ -53,6 +55,7 @@ def user_sbp_amount_prompt(app_id: int) -> InlineKeyboardMarkup:
 def admin_sbp_confirm_buttons(app_id: int, user_id: int) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="Подтвердить выплату", callback_data=f"sbp_confirm_{app_id}_{user_id}")],
+        [InlineKeyboardButton(text="Отказать", callback_data=f"sbp_reject_confirm_{app_id}_{user_id}")],
         [InlineKeyboardButton(text="Отмена", callback_data=f"sbp_cancel_confirm_{app_id}_{user_id}")]
     ])
 
@@ -67,6 +70,14 @@ def admin_panel() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="📊 Статистика", callback_data="admin_stats")],
         [InlineKeyboardButton(text="📋 Список заявок", callback_data="admin_list")],
+        [InlineKeyboardButton(text="👥 Управление пользователями", callback_data="admin_users")],
         [InlineKeyboardButton(text="📨 Рассылка", callback_data="admin_broadcast")],
         [InlineKeyboardButton(text="❌ Закрыть", callback_data="admin_close")]
+    ])
+
+def admin_users_menu() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🔨 Забанить пользователя", callback_data="admin_ban")],
+        [InlineKeyboardButton(text="🔓 Разбанить пользователя", callback_data="admin_unban")],
+        [InlineKeyboardButton(text="⬅️ Назад", callback_data="admin_back")]
     ])

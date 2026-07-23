@@ -7,7 +7,7 @@ from aiogram import Bot
 
 from config import CHANNEL_ID, ADMIN_ID
 from keyboards import main_menu, subscribe_check_keyboard
-from database import add_user, is_user_banned, get_ban_reason
+from database import add_user, is_user_banned
 
 router = Router()
 logger = logging.getLogger(__name__)
@@ -19,12 +19,8 @@ async def cmd_start(message: Message, state: FSMContext, bot: Bot):
     username = message.from_user.username or "нет username"
     add_user(user_id, username)
 
-    # Проверка бана
     if is_user_banned(user_id):
-        reason = get_ban_reason(user_id)
-        await message.answer(
-            f"⛔ Вы забанены.\nПричина: {reason or 'Не указана'}"
-        )
+        await message.answer("⛔ Вы забанены и не можете пользоваться ботом.")
         return
 
     welcome = (
@@ -40,7 +36,7 @@ async def cmd_start(message: Message, state: FSMContext, bot: Bot):
 async def check_subscription(message: Message, bot: Bot, state: FSMContext):
     user_id = message.from_user.id
     try:
-        member = await bot.get_chat_member(CHANNEL_ID, user_id)
+        member = await bot.get_chat_member(chat_id=CHANNEL_ID, user_id=user_id)
         if member.status in ('member', 'administrator', 'creator'):
             await message.answer("Выберите действие:", reply_markup=main_menu())
         else:
@@ -55,6 +51,4 @@ async def check_subscription(message: Message, bot: Bot, state: FSMContext):
 @router.callback_query(F.data == "check_subscription")
 async def check_subscription_cb(callback: CallbackQuery, bot: Bot, state: FSMContext):
     await callback.answer()
-    # Повторно проверяем подписку
     await check_subscription(callback.message, bot, state)
-    await callback.message.delete()  # удаляем сообщение с кнопкой проверки
