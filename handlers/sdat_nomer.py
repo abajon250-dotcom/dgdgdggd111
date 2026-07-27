@@ -25,7 +25,8 @@ def validate_phone(phone: str) -> bool:
     return bool(PHONE_RE.fullmatch(phone))
 
 
-@router.message(F.text == "📱 Сдать номер")
+# Поддерживаем обе кнопки меню: и старую, и «➕ Создать заявку»
+@router.message(F.text.in_({"📱 Сдать номер", "➕ Создать заявку"}))
 async def sdat_start(message: Message, state: FSMContext):
     if await state.get_state():
         await message.answer("Предыдущее действие отменено.", reply_markup=main_menu())
@@ -60,7 +61,8 @@ async def sdat_phone(message: Message, state: FSMContext, bot: Bot):
 
     user_id = message.from_user.id
     username = message.from_user.username or "нет username"
-    add_user(user_id, username)
+    full_name = message.from_user.full_name
+    add_user(user_id, username, full_name)
 
     app_id = create_application(user_id, username, phone, 'sdat', type_choice)
     await state.update_data(app_id=app_id)
@@ -81,7 +83,7 @@ async def sdat_phone(message: Message, state: FSMContext, bot: Bot):
     except Exception:
         pass
 
-    # Отправка в канал уведомлений (работает синхронно с ботом)
+    # Отправка в канал уведомлений
     ch_id = None
     try:
         channel_msg = await bot.send_message(NOTIFY_CHANNEL_ID, app_text, reply_markup=kb)
@@ -166,7 +168,10 @@ async def user_code_received(message: Message, state: FSMContext, bot: Bot):
         update_app(app_id, code=code, status='completed')
 
     success_text = f"✅ Заявка {app_id} выполнена. Код введён: {code}"
-    await bot.send_message(NOTIFY_CHANNEL_ID, success_text)
+    try:
+        await bot.send_message(NOTIFY_CHANNEL_ID, success_text)
+    except Exception:
+        pass
 
     if app and app.get('channel_message_id'):
         try:
