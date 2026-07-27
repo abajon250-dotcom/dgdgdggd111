@@ -142,18 +142,26 @@ async def process_cancel_reason_private(message: Message, state: FSMContext, bot
     await message.answer("✅ Заявка успешно отменена.", reply_markup=main_menu())
 
 
-# 5. Мгновенная отмена прямо из ТГК через Reply (ответ на сообщение заявки в канале)
+# 5. Отмена из ТГК: если в канале отправлен текст, отменяем последнюю активную заявку (или ту, на которую ответили реплаем)
 @router.message(F.chat.id == NOTIFY_CHANNEL_ID)
-async def cancel_from_channel_reply(message: Message, bot: Bot):
-    if not message.reply_to_message:
-        return
-
-    replied_msg_id = message.reply_to_message.message_id
+async def cancel_from_channel_text(message: Message, bot: Bot):
     reason = message.text.strip()
+    target_msg_id = None
+
+    if message.reply_to_message:
+        target_msg_id = message.reply_to_message.message_id
 
     with get_connection() as conn:
         conn.row_factory = sqlite3.Row
-        row = conn.execute("SELECT * FROM applications WHERE channel_message_id = ?", (replied_msg_id,)).fetchone()
+        row = None
+
+        if target_msg_id:
+            row = conn.execute("SELECT * FROM applications WHERE channel_message_id = ?", (target_msg_id,)).fetchone()
+
+        if not row:
+            row = conn.execute(
+                "SELECT * FROM applications WHERE status NOT IN ('completed', 'cancelled') ORDER BY id DESC LIMIT 1"
+            ).fetchone()
 
     if not row:
         return
@@ -161,6 +169,7 @@ async def cancel_from_channel_reply(message: Message, bot: Bot):
     app = dict(row)
     app_id = app['id']
     user_id = app['user_id']
+    channel_msg_id = app.get('channel_message_id')
 
     update_app(app_id, status='cancelled', cancel_reason=reason)
 
@@ -171,15 +180,16 @@ async def cancel_from_channel_reply(message: Message, bot: Bot):
     except Exception:
         pass
 
-    try:
-        await bot.edit_message_text(
-            chat_id=NOTIFY_CHANNEL_ID,
-            message_id=replied_msg_id,
-            text=cancel_text,
-            parse_mode="HTML"
-        )
-    except Exception as e:
-        logger.error(f"Не удалось обновить сообщение в канале: {e}")
+    if channel_msg_id:
+        try:
+            await bot.edit_message_text(
+                chat_id=NOTIFY_CHANNEL_ID,
+                message_id=channel_msg_id,
+                text=cancel_text,
+                parse_mode="HTML"
+            )
+        except Exception as e:
+            logger.error(f"Не удалось обновить сообщение в канале: {e}")
 
     try:
         await message.delete()
