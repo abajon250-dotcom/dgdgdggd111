@@ -7,14 +7,14 @@ from aiogram.fsm.storage.base import StorageKey
 
 from config import NOTIFY_CHANNEL_ID
 from states import AdminStates, UserStates
-from keyboards import admin_sdat_buttons, user_code_prompt, main_menu
+from keyboards import admin_sdat_buttons, admin_sbp_buttons, user_code_prompt, main_menu
 from database import update_app, get_app, get_connection
 
 router = Router()
 logger = logging.getLogger(__name__)
 
 
-# 1. Запрос кода у пользователя (кнопка «Запросить код» в канале)
+# 1. Запрос кода у пользователя (кнопка в группе)
 @router.callback_query(F.data.startswith("sdat_code_"))
 async def sdat_request_code(callback: CallbackQuery, state: FSMContext, bot: Bot):
     await callback.answer("Код запрошен!")
@@ -43,21 +43,15 @@ async def sdat_request_code(callback: CallbackQuery, state: FSMContext, bot: Bot
     await state.storage.set_state(key=storage_key, state=UserStates.sdat_code_prompt)
     await state.storage.set_data(key=storage_key, data={'app_id': app_id})
 
-    channel_alert_text = f"🔑 Код запрошен (заявка #{app_id}) — попытка {new_count}"
+    # Обновляем клавиатуру в группе, показывая количество попыток
     kb = admin_sdat_buttons(app_id, user_id)
-
-    try:
-        await bot.send_message(chat_id=NOTIFY_CHANNEL_ID, text=channel_alert_text, reply_markup=kb)
-    except Exception as e:
-        logger.error(f"Не удалось отправить сообщение в канал: {e}")
-
     try:
         await callback.message.edit_reply_markup(reply_markup=kb)
     except Exception:
         pass
 
 
-# 2. Кнопка «Завершить» в канале
+# 2. Кнопка «Завершить» в группе
 @router.callback_query(F.data.startswith("sdat_complete_"))
 async def sdat_admin_complete(callback: CallbackQuery, bot: Bot):
     await callback.answer("Заявка завершена!")
@@ -78,6 +72,7 @@ async def sdat_admin_complete(callback: CallbackQuery, bot: Bot):
     except Exception:
         pass
 
+    # Редактируем сообщение в группе
     if app.get('channel_message_id'):
         try:
             await bot.edit_message_text(
@@ -95,7 +90,7 @@ async def sdat_admin_complete(callback: CallbackQuery, bot: Bot):
         pass
 
 
-# 3. Кнопка «Отменить заявку» (при клике в ЛС или по инлайн-кнопке)
+# 3. Кнопка «Отменить заявку» в группе — запускает процесс ввода причины
 @router.callback_query(F.data.startswith("sdat_cancel_"))
 async def sdat_admin_cancel_click(callback: CallbackQuery, state: FSMContext):
     await callback.answer()
@@ -103,14 +98,19 @@ async def sdat_admin_cancel_click(callback: CallbackQuery, state: FSMContext):
     app_id = int(parts[2])
     user_id = int(parts[3])
 
+    # Сохраняем ID заявки и пользователя в FSM администратора, который нажал кнопку
     await state.set_state(AdminStates.waiting_cancel_reason)
     await state.update_data(cancel_app_id=app_id, cancel_user_id=user_id)
-    await callback.message.answer("❌ Введите причину отмены заявки:")
+
+    # Отправляем сообщение админу (лучше в личку или в ответ в группе)
+    await callback.message.answer(
+        f"❌ Введите причину отмены для заявки #{app_id} (отправьте следующим сообщением в чат):"
+    )
 
 
-# 4. Ввод причины отмены в ЛС бота
-@router.message(AdminStates.waiting_cancel_reason, F.chat.type == "private")
-async def process_cancel_reason_private(message: Message, state: FSMContext, bot: Bot):
+# 4. Обработка введенной причины отмены от администратора в группе
+@router.message(AdminStates.waiting_cancel_reason, F.chat.id == NOTIFY_CHANNEL_ID)
+async def process_cancel_reason_group(message: Message, state: FSMContext, bot: Bot):
     reason = message.text.strip()
     data = await state.get_data()
     app_id = data.get("cancel_app_id")
@@ -122,11 +122,13 @@ async def process_cancel_reason_private(message: Message, state: FSMContext, bot
 
         cancel_text = f"❌ <b>Заявка #{app_id} отменена администратором.</b>\nПричина: {reason}"
 
+        # Уведомляем пользователя
         try:
             await bot.send_message(user_id, cancel_text, parse_mode="HTML")
         except Exception:
             pass
 
+        # Редактируем сообщение с заявкой в группе
         if app and app.get('channel_message_id'):
             try:
                 await bot.edit_message_text(
@@ -139,51 +141,8 @@ async def process_cancel_reason_private(message: Message, state: FSMContext, bot
                 pass
 
     await state.clear()
-    await message.answer("✅ Заявка успешно отменена.", reply_markup=main_menu())
 
-
-# 5. Мгновенная отмена заявки текстом прямо в канале (ТГК)
-@router.message(F.chat.id == NOTIFY_CHANNEL_ID)
-async def cancel_from_channel_direct(message: Message, bot: Bot):
-    if not message.text:
-        return
-
-    reason = message.text.strip()
-
-    with get_connection() as conn:
-        conn.row_factory = sqlite3.Row
-        row = conn.execute(
-            "SELECT * FROM applications WHERE status NOT IN ('completed', 'cancelled') ORDER BY id DESC LIMIT 1"
-        ).fetchone()
-
-    if not row:
-        return
-
-    app = dict(row)
-    app_id = app['id']
-    user_id = app['user_id']
-    channel_msg_id = app.get('channel_message_id')
-
-    update_app(app_id, status='cancelled', cancel_reason=reason)
-
-    cancel_text = f"❌ <b>Заявка #{app_id} отменена администратором.</b>\nПричина: {reason}"
-
-    try:
-        await bot.send_message(user_id, cancel_text, parse_mode="HTML")
-    except Exception:
-        pass
-
-    if channel_msg_id:
-        try:
-            await bot.edit_message_text(
-                chat_id=NOTIFY_CHANNEL_ID,
-                message_id=channel_msg_id,
-                text=cancel_text,
-                parse_mode="HTML"
-            )
-        except Exception as e:
-            logger.error(f"Не удалось обновить сообщение в канале: {e}")
-
+    # Удаляем сообщение администратора с причиной для порядка в группе
     try:
         await message.delete()
     except Exception:
