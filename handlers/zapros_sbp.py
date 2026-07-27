@@ -5,14 +5,18 @@ from aiogram.types import CallbackQuery
 from config import NOTIFY_CHANNEL_ID
 from keyboards import sbp_type_inline, admin_sbp_buttons, main_menu
 from database import create_application, update_app
+from handlers.start import check_sub
 
 router = Router()
 logger = logging.getLogger(__name__)
 
 
-# Открытие подменю СБП
 @router.callback_query(F.data == "category_sbp")
-async def process_sbp_category(callback: CallbackQuery):
+async def process_sbp_category(callback: CallbackQuery, bot: Bot):
+    if not await check_sub(bot, callback.from_user.id):
+        await callback.answer("❌ Нужна подписка!", show_alert=True)
+        return
+
     await callback.answer()
     await callback.message.edit_text(
         "💳 Выберите сервис для СБП:",
@@ -20,9 +24,12 @@ async def process_sbp_category(callback: CallbackQuery):
     )
 
 
-# Моментальное создание заявки при выборе сервиса СБП
 @router.callback_query(F.data.in_(["service_sbp_adengi", "service_sbp_manimen"]))
 async def process_sbp_creation(callback: CallbackQuery, bot: Bot):
+    if not await check_sub(bot, callback.from_user.id):
+        await callback.answer("❌ Нужна подписка!", show_alert=True)
+        return
+
     await callback.answer()
     service_name = "АДЕНЬГИ" if "adengi" in callback.data else "МАНИМЕН"
     service_type = f"{service_name} (СБП)"
@@ -30,13 +37,12 @@ async def process_sbp_creation(callback: CallbackQuery, bot: Bot):
     user_id = callback.from_user.id
     username = callback.from_user.username or "отсутствует"
 
-    # Создаем заявку в базе данных (передаем type_choice, чтобы избежать TypeError)
     app_id = create_application(
         user_id=user_id,
         username=username,
+        type_choice="СБП",
         service_type=service_type,
-        phone="Ожидание реквизитов",
-        type_choice="СБП"  # <--- Добавлено имя недостающего аргумента
+        phone="Ожидание реквизитов"
     )
 
     text_for_group = (

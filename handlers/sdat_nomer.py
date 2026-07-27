@@ -8,14 +8,18 @@ from config import NOTIFY_CHANNEL_ID
 from states import UserStates
 from keyboards import numbers_type_inline, admin_sdat_buttons, main_menu
 from database import create_application, update_app
+from handlers.start import check_sub
 
 router = Router()
 logger = logging.getLogger(__name__)
 
 
-# Открытие подменю Номеров
 @router.callback_query(F.data == "category_numbers")
-async def process_numbers_category(callback: CallbackQuery):
+async def process_numbers_category(callback: CallbackQuery, bot: Bot):
+    if not await check_sub(bot, callback.from_user.id):
+        await callback.answer("❌ Нужна подписка!", show_alert=True)
+        return
+
     await callback.answer()
     await callback.message.edit_text(
         "📱 Выберите сервис для сдачи номера:",
@@ -23,9 +27,12 @@ async def process_numbers_category(callback: CallbackQuery):
     )
 
 
-# Выбор конкретного сервиса для номера
 @router.callback_query(F.data.in_(["service_num_adengi", "service_num_manimen"]))
-async def process_numbers_choice(callback: CallbackQuery, state: FSMContext):
+async def process_numbers_choice(callback: CallbackQuery, state: FSMContext, bot: Bot):
+    if not await check_sub(bot, callback.from_user.id):
+        await callback.answer("❌ Нужна подписка!", show_alert=True)
+        return
+
     await callback.answer()
     service_name = "АДЕНЬГИ" if "adengi" in callback.data else "МАНИМЕН"
 
@@ -38,16 +45,14 @@ async def process_numbers_choice(callback: CallbackQuery, state: FSMContext):
     )
 
 
-# Жесткая проверка номера и создание заявки
 @router.message(UserStates.waiting_for_phone)
 async def process_phone_validation(message: Message, state: FSMContext, bot: Bot):
     phone = message.text.strip()
     digits_only = re.sub(r'\D', '', phone)
 
-    # Строгая проверка: ровно 11 цифр, начинается на 7 или 8
     if not (len(digits_only) == 11 and (digits_only.startswith('7') or digits_only.startswith('8'))):
         await message.answer(
-            "❌ <b>Неверный номер!</b>\nТребуется корректный российский номер телефона (11 цифр, например: <code>+79991234567</code> или <code>89991234567</code>).\n\nПопробуйте еще раз:",
+            "❌ <b>Неверный номер!</b>\nТребуется российский номер телефона (11 цифр, с +7 или 8).\n\nПопробуйте еще раз:",
             parse_mode="HTML"
         )
         return
@@ -61,6 +66,7 @@ async def process_phone_validation(message: Message, state: FSMContext, bot: Bot
     app_id = create_application(
         user_id=user_id,
         username=username,
+        type_choice="Номер",
         service_type=service_type,
         phone=phone
     )
