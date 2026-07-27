@@ -9,8 +9,8 @@ CHANNEL_ID = os.getenv('CHANNEL_ID')
 NOTIFY_CHANNEL_ID = os.getenv('NOTIFY_CHANNEL_ID') or CHANNEL_ID
 
 if not TOKEN:
-    raise ValueError("TOKEN не задан")
+    raise ValueError("❌ TOKEN не задан в .env файле!")
 if not ADMIN_ID:
-    raise ValueError("ADMIN_ID не задан")
+    raise ValueError("❌ ADMIN_ID не задан в .env файле!")
 if not CHANNEL_ID:
-    raise ValueError("CHANNEL_ID не задан")
+    raise ValueError("❌ CHANNEL_ID не задан в .env файле!")

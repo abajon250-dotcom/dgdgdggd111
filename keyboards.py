@@ -21,7 +21,7 @@ def cancel_keyboard() -> ReplyKeyboardMarkup:
 
 
 def type_inline() -> InlineKeyboardMarkup:
-    """Инлайн-клавиатура выбора типа сервиса (АДЕНЬГИ / МАНИМЕН)"""
+    """Инлайн-клавиатура выбора типа сервиса"""
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="💎 АДЕНЬГИ", callback_data="type_adengi")],
         [InlineKeyboardButton(text="🔥 МАНИМЕН", callback_data="type_manimen")]
@@ -37,7 +37,7 @@ def subscribe_check_keyboard(channel_url: str) -> InlineKeyboardMarkup:
 
 
 def admin_sdat_buttons(app_id: int, user_id: int) -> InlineKeyboardMarkup:
-    """Интерактивные кнопки управления заявкой «Сдать номер» для админа"""
+    """Кнопки управления заявкой «Сдать номер» для админа"""
     return InlineKeyboardMarkup(inline_keyboard=[
         [
             InlineKeyboardButton(text="🔑 Запросить код", callback_data=f"sdat_code_{app_id}_{user_id}"),
@@ -50,7 +50,7 @@ def admin_sdat_buttons(app_id: int, user_id: int) -> InlineKeyboardMarkup:
 
 
 def admin_sbp_buttons(app_id: int, user_id: int) -> InlineKeyboardMarkup:
-    """Интерактивные кнопки управления заявкой «СБП» для админа"""
+    """Кнопки управления заявкой «СБП» для админа"""
     return InlineKeyboardMarkup(inline_keyboard=[
         [
             InlineKeyboardButton(text="💳 Отправить реквизиты", callback_data=f"sbp_req_{app_id}_{user_id}"),
