@@ -6,7 +6,6 @@ load_dotenv()
 BOT_TOKEN = os.getenv("TOKEN")
 ADMIN_ID = int(os.getenv("ADMIN_ID", 0))
 
-# Поддержка ID чата уведомлений или юзернейма канала
 raw_channel = os.getenv("NOTIFY_CHANNEL_ID") or os.getenv("CHANNEL_ID")
 try:
     NOTIFY_CHANNEL_ID = int(raw_channel)

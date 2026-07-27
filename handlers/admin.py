@@ -101,8 +101,6 @@ async def admin_done_app(callback: CallbackQuery, bot: Bot):
         pass
 
 
-# --- ЛОГИКА ОТМЕНЫ С ПРИЧИНОЙ ---
-
 @router.callback_query(F.data.startswith("admin_cancel:"))
 async def admin_cancel_prompt(callback: CallbackQuery, state: FSMContext, bot: Bot):
     if callback.from_user.id != ADMIN_ID:
@@ -111,7 +109,6 @@ async def admin_cancel_prompt(callback: CallbackQuery, state: FSMContext, bot: B
 
     _, app_id_str, target_user_id_str = callback.data.split(":")
 
-    # Сохраняем данные заявки во временное состояние FSM
     await state.update_data(
         cancel_app_id=int(app_id_str),
         cancel_user_id=int(target_user_id_str),
@@ -141,7 +138,6 @@ async def admin_process_cancel_reason(message: Message, state: FSMContext, bot: 
     update_app(app_id, status=f"Отменено: {reason}")
     await state.clear()
 
-    # Уведомляем пользователя с указанием причины
     try:
         await bot.send_message(
             chat_id=target_user_id,
@@ -151,10 +147,8 @@ async def admin_process_cancel_reason(message: Message, state: FSMContext, bot: 
     except Exception:
         pass
 
-    # Уведомляем админа в чате
     await message.answer(f"✅ Причина для заявки #{app_id} успешно отправлена пользователю.")
 
-    # Обновляем сообщение в группе уведомлений
     try:
         await bot.edit_message_text(
             chat_id=NOTIFY_CHANNEL_ID,

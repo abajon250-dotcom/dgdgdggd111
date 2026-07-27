@@ -45,3 +45,11 @@ def get_app(app_id):
     row = cursor.fetchone()
     conn.close()
     return row
+
+def get_user_applications(user_id):
+    conn = sqlite3.connect("database.db")
+    cursor = conn.cursor()
+    cursor.execute("SELECT id, service_type, status FROM applications WHERE user_id = ? ORDER BY id DESC LIMIT 5", (user_id,))
+    rows = cursor.fetchall()
+    conn.close()
+    return rows

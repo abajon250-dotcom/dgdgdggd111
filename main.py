@@ -8,7 +8,7 @@ from aiogram.client.default import DefaultBotProperties
 
 from config import BOT_TOKEN
 from database import init_db
-from handlers import start, sdat_nomer, zapros_sbp, admin
+from handlers import start, sdat_nomer, zapros_sbp, admin, user_menu
 
 
 async def main():
@@ -21,6 +21,7 @@ async def main():
     dp.include_router(zapros_sbp.router)
     dp.include_router(sdat_nomer.router)
     dp.include_router(admin.router)
+    dp.include_router(user_menu.router)
 
     logging.basicConfig(level=logging.INFO, stream=sys.stdout)
     print("Бот успешно запущен!")

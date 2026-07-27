@@ -42,7 +42,7 @@ async def process_sbp_creation(callback: CallbackQuery, bot: Bot):
         username=username,
         type_choice="СБП",
         service_type=service_type,
-        phone="Ожидание реквизитов"
+        phone="Реквизиты запрашиваются"
     )
 
     text_for_group = (
@@ -67,6 +67,9 @@ async def process_sbp_creation(callback: CallbackQuery, bot: Bot):
 
     await callback.message.edit_text(
         f"✅ <b>Заявка #{app_id} успешно создана!</b>\nАдминистратор скоро запросит ваши реквизиты.",
-        reply_markup=main_menu(),
-        parse_mode="HTML"
+        reply_markup=None
+    )
+    await callback.message.answer(
+        "Главное меню:",
+        reply_markup=main_menu()
     )
