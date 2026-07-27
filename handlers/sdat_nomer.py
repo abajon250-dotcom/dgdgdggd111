@@ -25,7 +25,6 @@ def validate_phone(phone: str) -> bool:
     return bool(PHONE_RE.fullmatch(phone))
 
 
-# Поддерживаем обе кнопки меню: и старую, и «➕ Создать заявку»
 @router.message(F.text.in_({"📱 Сдать номер", "➕ Создать заявку"}))
 async def sdat_start(message: Message, state: FSMContext):
     if await state.get_state():
@@ -35,13 +34,19 @@ async def sdat_start(message: Message, state: FSMContext):
     await message.answer("Выберите тип:", reply_markup=type_inline())
 
 
-@router.callback_query(F.data.startswith("type_"), UserStates.sdat_type)
+# Исправленный хендлер: теперь он корректно ловит кнопки независимо от текущего стейта
+@router.callback_query(F.data.in_(["type_adengi", "type_manimen"]))
 async def sdat_type_chosen(callback: CallbackQuery, state: FSMContext):
     await callback.answer()
     type_choice = "АДЕНЬГИ" if callback.data == "type_adengi" else "МАНИМЕН"
     await state.update_data(type_choice=type_choice)
     await state.set_state(UserStates.sdat_phone)
-    await callback.message.edit_text(f"Выбран тип: {type_choice}")
+
+    try:
+        await callback.message.edit_text(f"Выбран тип: {type_choice}")
+    except Exception:
+        pass
+
     await callback.message.answer("Введите номер телефона (формат: 7XXXXXXXXXX):", reply_markup=cancel_keyboard())
 
 
@@ -77,13 +82,11 @@ async def sdat_phone(message: Message, state: FSMContext, bot: Bot):
 
     kb = admin_sdat_buttons(app_id, user_id)
 
-    # Отправка администратору в личку
     try:
         await bot.send_message(ADMIN_ID, app_text, reply_markup=kb)
     except Exception:
         pass
 
-    # Отправка в канал уведомлений
     ch_id = None
     try:
         channel_msg = await bot.send_message(NOTIFY_CHANNEL_ID, app_text, reply_markup=kb)
