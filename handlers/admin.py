@@ -1,5 +1,6 @@
 import logging
 import sqlite3
+import re
 from aiogram import Router, F, Bot
 from aiogram.types import CallbackQuery, Message
 from aiogram.fsm.context import FSMContext
@@ -142,21 +143,27 @@ async def process_cancel_reason_private(message: Message, state: FSMContext, bot
     await message.answer("✅ Заявка успешно отменена.", reply_markup=main_menu())
 
 
-# 5. Отмена из ТГК: если в канале отправлен текст, отменяем последнюю активную заявку (или ту, на которую ответили реплаем)
+# 5. Мгновенная отмена прямо из ТГК текстовым сообщением (например, "скип" или "1 скип")
 @router.message(F.chat.id == NOTIFY_CHANNEL_ID)
 async def cancel_from_channel_text(message: Message, bot: Bot):
-    reason = message.text.strip()
-    target_msg_id = None
+    text = message.text.strip()
 
-    if message.reply_to_message:
-        target_msg_id = message.reply_to_message.message_id
+    app_id = None
+    match = re.search(r'^#?(\d+)', text)
+    if match and len(text.split()[0]) <= 3:
+        app_id = int(match.group(1))
+        reason = re.sub(r'^#?\d+\s*', '', text).strip()
+        if not reason:
+            reason = "Отменено администратором"
+    else:
+        reason = text
 
     with get_connection() as conn:
         conn.row_factory = sqlite3.Row
-        row = None
 
-        if target_msg_id:
-            row = conn.execute("SELECT * FROM applications WHERE channel_message_id = ?", (target_msg_id,)).fetchone()
+        row = None
+        if app_id:
+            row = conn.execute("SELECT * FROM applications WHERE id = ?", (app_id,)).fetchone()
 
         if not row:
             row = conn.execute(
