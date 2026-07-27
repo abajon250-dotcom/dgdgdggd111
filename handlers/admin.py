@@ -3,11 +3,12 @@ from aiogram import Router, F
 from aiogram.filters import Command
 from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.fsm.context import FSMContext
+from aiogram.fsm.storage.base import StorageKey
 from aiogram import Bot
 
-from config import ADMIN_ID
-from database import get_stats, get_apps, get_app, get_all_users, ban_user, unban_user
-from keyboards import main_menu
+from config import ADMIN_ID, NOTIFY_CHANNEL_ID
+from database import get_stats, get_apps, get_app, get_all_users, ban_user, unban_user, update_app
+from keyboards import main_menu, admin_sdat_buttons, admin_sbp_buttons, admin_sbp_confirm_buttons
 from states import AdminStates
 
 router = Router()
@@ -36,14 +37,16 @@ def admin_panel_keyboard() -> InlineKeyboardMarkup:
     ])
 
 
+# Добавляем кнопку админ-панели в текстовое меню для администратора
+@router.message(F.text == "👑 Админ-панель")
 @router.message(Command("admin"))
 async def admin_panel_cmd(message: Message):
     if not is_admin(message.from_user.id):
-        await message.answer("⛔ Нет прав.")
+        await message.answer("⛔ У вас нет прав администратора.")
         return
     stats = get_stats()
     text = (
-        "👑 **Панель администратора**\n\n"
+        f"👑 **Панель администратора**\n\n"
         f"📌 Всего заявок: <b>{stats.get('total', 0)}</b>\n"
         f"⏳ В ожидании: <b>{stats.get('waiting', 0)}</b>\n"
         f"✅ Завершено: <b>{stats.get('completed', 0)}</b>\n"
@@ -63,7 +66,7 @@ async def admin_stats_cb(callback: CallbackQuery):
     stats = get_stats()
     users_count = len(get_all_users())
     text = (
-        "📊 **Расширенная статистика**\n\n"
+        f"📊 **Расширенная статистика**\n\n"
         f"👥 Всего пользователей в базе: <b>{users_count}</b>\n"
         f"📌 Всего заявок: <b>{stats.get('total', 0)}</b>\n"
         f" ├ ⏳ В ожидании: <b>{stats.get('waiting', 0)}</b>\n"
@@ -87,7 +90,7 @@ async def admin_back_cb(callback: CallbackQuery):
     await callback.answer()
     stats = get_stats()
     text = (
-        "👑 **Панель администратора**\n\n"
+        f"👑 **Панель администратора**\n\n"
         f"📌 Всего заявок: <b>{stats.get('total', 0)}</b>\n"
         f"⏳ В ожидании: <b>{stats.get('waiting', 0)}</b>\n"
         f"✅ Завершено: <b>{stats.get('completed', 0)}</b>\n"
@@ -98,7 +101,7 @@ async def admin_back_cb(callback: CallbackQuery):
     await callback.message.edit_text(text, reply_markup=admin_panel_keyboard(), parse_mode="HTML")
 
 
-# --- Меню управления пользователями (Бан / Разбан) ---
+# --- Управление пользователями ---
 
 @router.callback_query(F.data == "admin_users_menu")
 async def admin_users_menu_cb(callback: CallbackQuery):
@@ -113,7 +116,7 @@ async def admin_users_menu_cb(callback: CallbackQuery):
         [InlineKeyboardButton(text="« Назад в меню", callback_data="admin_back")]
     ])
     await callback.message.edit_text(
-        "👥 **Управление пользователями**\n\nВыберите действие:",
+        f"👥 **Управление пользователями**\n\nВыберите действие:",
         reply_markup=kb,
         parse_mode="HTML"
     )
@@ -131,7 +134,7 @@ async def admin_ban_start_cb(callback: CallbackQuery, state: FSMContext):
         [InlineKeyboardButton(text="❌ Отмена", callback_data="admin_users_menu")]
     ])
     await callback.message.edit_text(
-        "🔨 Введите <b>Telegram ID</b> пользователя для блокировки:",
+        f"🔨 Введите **Telegram ID** пользователя для блокировки:",
         reply_markup=kb,
         parse_mode="HTML"
     )
@@ -149,20 +152,7 @@ async def process_ban_user(message: Message, state: FSMContext):
 
     ban_user(target_id)
     await state.clear()
-
-    await message.answer(f"✅ Пользователь с ID <code>{target_id}</code> успешно заблокирован.", parse_mode="HTML")
-
-    stats = get_stats()
-    text = (
-        "👑 **Панель администратора**\n\n"
-        f"📌 Всего заявок: <b>{stats.get('total', 0)}</b>\n"
-        f"⏳ В ожидании: <b>{stats.get('waiting', 0)}</b>\n"
-        f"✅ Завершено: <b>{stats.get('completed', 0)}</b>\n"
-        f"❌ Отменено: <b>{stats.get('cancelled', 0)}</b>\n"
-        f"📱 Сдать номер: <b>{stats.get('sdat', 0)}</b>\n"
-        f"💰 СБП: <b>{stats.get('sbp', 0)}</b>"
-    )
-    await message.answer(text, reply_markup=admin_panel_keyboard(), parse_mode="HTML")
+    await message.answer(f"✅ Пользователь с ID <code>{target_id}</code> заблокирован.", parse_mode="HTML")
 
 
 @router.callback_query(F.data == "admin_unban_start")
@@ -177,7 +167,7 @@ async def admin_unban_start_cb(callback: CallbackQuery, state: FSMContext):
         [InlineKeyboardButton(text="❌ Отмена", callback_data="admin_users_menu")]
     ])
     await callback.message.edit_text(
-        "🔓 Введите <b>Telegram ID</b> пользователя для разблокировки:",
+        f"🔓 Введите **Telegram ID** пользователя для разблокировки:",
         reply_markup=kb,
         parse_mode="HTML"
     )
@@ -195,20 +185,7 @@ async def process_unban_user(message: Message, state: FSMContext):
 
     unban_user(target_id)
     await state.clear()
-
     await message.answer(f"✅ Пользователь с ID <code>{target_id}</code> разблокирован.", parse_mode="HTML")
-
-    stats = get_stats()
-    text = (
-        "👑 **Панель администратора**\n\n"
-        f"📌 Всего заявок: <b>{stats.get('total', 0)}</b>\n"
-        f"⏳ В ожидании: <b>{stats.get('waiting', 0)}</b>\n"
-        f"✅ Завершено: <b>{stats.get('completed', 0)}</b>\n"
-        f"❌ Отменено: <b>{stats.get('cancelled', 0)}</b>\n"
-        f"📱 Сдать номер: <b>{stats.get('sdat', 0)}</b>\n"
-        f"💰 СБП: <b>{stats.get('sbp', 0)}</b>"
-    )
-    await message.answer(text, reply_markup=admin_panel_keyboard(), parse_mode="HTML")
 
 
 # --- Список заявок с пагинацией ---
@@ -222,7 +199,6 @@ async def admin_list_cb(callback: CallbackQuery):
 
     offset = int(callback.data.split("_")[2])
     limit = 8
-
     apps = get_apps(limit=limit, offset=offset)
 
     if not apps and offset == 0:
@@ -232,7 +208,6 @@ async def admin_list_cb(callback: CallbackQuery):
         return
 
     text = f"📋 **Список заявок (стр. {offset // limit + 1}):**\n\n"
-
     keyboard_buttons = []
     for app in apps:
         emoji = {'waiting': '⏳', 'code_requested': '🔑', 'requisites_sent': '💳', 'amount_reported': '💰',
@@ -241,7 +216,6 @@ async def admin_list_cb(callback: CallbackQuery):
         keyboard_buttons.append(InlineKeyboardButton(text=f"📄 #{app['id']}", callback_data=f"admin_view_{app['id']}"))
 
     rows = [keyboard_buttons[i:i + 4] for i in range(0, len(keyboard_buttons), 4)]
-
     nav_buttons = []
     if offset > 0:
         nav_buttons.append(InlineKeyboardButton(text="⬅️ Назад", callback_data=f"admin_list_{max(0, offset - limit)}"))
@@ -286,51 +260,84 @@ async def admin_view_callback(callback: CallbackQuery):
     if app['cancel_reason']:
         text += f"❌ Причина отмены: <i>{app['cancel_reason']}</i>"
 
-    kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="« К списку заявок", callback_data="admin_list_0")]
-    ])
-    await callback.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
+    # Добавляем интерактивные кнопки управления прямо из меню просмотра заявки
+    if app['service_type'] == 'sdat':
+        kb_actions = admin_sdat_buttons(app['id'], app['user_id'])
+    else:
+        kb_actions = admin_sbp_buttons(app['id'], app['user_id'])
+
+    rows = kb_actions.inline_keyboard + [[InlineKeyboardButton(text="« К списку заявок", callback_data="admin_list_0")]]
+    await callback.message.edit_text(text, reply_markup=InlineKeyboardMarkup(inline_keyboard=rows), parse_mode="HTML")
 
 
-@router.message(Command("view"))
-async def view_app_cmd(message: Message):
+# --- Универсальный обработчик отмены заявок из канала/личчки ---
+
+@router.callback_query(
+    F.data.startswith("sdat_cancel_") | F.data.startswith("sbp_cancel_") | F.data.startswith("sbp_cancel_confirm_"))
+async def universal_cancel_start(callback: CallbackQuery, state: FSMContext):
+    if not is_admin(callback.from_user.id):
+        await callback.answer("Нет прав", show_alert=True)
+        return
+    await callback.answer()
+
+    parts = callback.data.split("_")
+    # Извлекаем app_id и user_id в зависимости от структуры callback_data
+    if "confirm" in callback.data:
+        app_id = int(parts[3])
+        user_id = int(parts[4])
+    else:
+        app_id = int(parts[2])
+        user_id = int(parts[3])
+
+    await state.set_state(AdminStates.waiting_cancel_reason)
+    await state.update_data(cancel_app_id=app_id, cancel_user_id=user_id)
+
+    await callback.message.answer(f"❌ Введите причину отмены для заявки #{app_id}:")
+
+
+@router.message(AdminStates.waiting_cancel_reason)
+async def admin_cancel_reason_finish(message: Message, state: FSMContext, bot: Bot):
     if not is_admin(message.from_user.id):
-        await message.answer("⛔ Нет прав.")
         return
-    args = message.text.split()
-    if len(args) < 2:
-        await message.answer("⚠️ Укажите ID: /view 123")
-        return
-    try:
-        app_id = int(args[1])
-    except ValueError:
-        await message.answer("❌ ID должно быть числом.")
+
+    reason = message.text
+    data = await state.get_data()
+    app_id = data.get('cancel_app_id')
+    user_id = data.get('cancel_user_id')
+
+    if not app_id or not user_id:
+        await message.answer("⚠️ Ошибка контекста заявки. Попробуйте отменить через список.")
+        await state.clear()
         return
 
     app = get_app(app_id)
-    if not app:
-        await message.answer("❌ Заявка не найдена.")
-        return
+    update_app(app_id, status='cancelled', cancel_reason=reason)
 
-    text = (
-        f"📄 **Заявка #{app['id']}**\n"
-        f"👤 Пользователь: @{app['username']} (ID: <code>{app['user_id']}</code>)\n"
-        f"📱 Услуга: <b>{app['service_type']}</b>\n"
-        f"🔘 Тип: <b>{app['type_choice']}</b>\n"
-        f"📞 Телефон: <code>{app['phone'] or '—'}</code>\n"
-        f"📊 Статус: <code>{app['status']}</code>\n"
-        f"🕐 Создана: {app['created_at']}\n"
-    )
-    if app['code']:
-        text += f"🔑 Код: <b>{app['code']}</b>\n"
-    if app['sbp_amount']:
-        text += f"💰 Сумма СБП: <b>{app['sbp_amount']}</b>\n"
-    if app['sbp_requisites']:
-        text += f"💳 Реквизиты: <code>{app['sbp_requisites']}</code>\n"
-    if app['cancel_reason']:
-        text += f"❌ Причина отмены: <i>{app['cancel_reason']}</i>"
+    # Уведомляем пользователя
+    try:
+        await bot.send_message(user_id,
+                               f"❌ Ваша заявка (ID: {app_id}) была отменена администратором.\nПричина: {reason}")
+    except Exception:
+        pass
 
-    await message.answer(text, parse_mode="HTML")
+    cancel_text = f"❌ Заявка #{app_id} отменена.\nПричина: {reason}"
+
+    # Обновляем сообщение в канале уведомлений, если оно есть
+    if app and app.get('channel_message_id'):
+        try:
+            await bot.edit_message_text(
+                chat_id=NOTIFY_CHANNEL_ID,
+                message_id=app['channel_message_id'],
+                text=cancel_text
+            )
+        except Exception:
+            try:
+                await bot.send_message(NOTIFY_CHANNEL_ID, cancel_text)
+            except Exception:
+                pass
+
+    await state.clear()
+    await message.answer(f"✅ Заявка #{app_id} успешно отменена.", reply_markup=admin_panel_keyboard())
 
 
 # --- Рассылка ---
@@ -347,7 +354,7 @@ async def admin_broadcast(callback: CallbackQuery, state: FSMContext):
         [InlineKeyboardButton(text="❌ Отменить рассылку", callback_data="admin_back")]
     ])
     await callback.message.edit_text(
-        "📨 **Массовая рассылка**\n\nВведите текст сообщения для отправки всем пользователям:",
+        f"📨 **Массовая рассылка**\n\nВведите текст сообщения для отправки всем пользователям:",
         reply_markup=cancel_kb,
         parse_mode="HTML"
     )
@@ -356,7 +363,6 @@ async def admin_broadcast(callback: CallbackQuery, state: FSMContext):
 @router.message(AdminStates.waiting_broadcast)
 async def broadcast_send(message: Message, state: FSMContext, bot: Bot):
     if not is_admin(message.from_user.id):
-        await message.answer("⛔ Нет прав.")
         await state.clear()
         return
 
@@ -376,26 +382,15 @@ async def broadcast_send(message: Message, state: FSMContext, bot: Bot):
         except Exception:
             blocked += 1
 
+    await state.clear()
     await message.answer(
         f"✅ **Рассылка завершена!**\n\n"
         f"📬 Доставлено: <b>{sent}</b>\n"
         f"🚫 Заблокировали бота: <b>{blocked}</b>\n"
         f"👥 Всего в базе: <b>{len(users)}</b>",
-        parse_mode="HTML"
+        parse_mode="HTML",
+        reply_markup=admin_panel_keyboard()
     )
-    await state.clear()
-
-    stats = get_stats()
-    stats_text = (
-        "👑 **Панель администратора**\n\n"
-        f"📌 Всего заявок: <b>{stats.get('total', 0)}</b>\n"
-        f"⏳ В ожидании: <b>{stats.get('waiting', 0)}</b>\n"
-        f"✅ Завершено: <b>{stats.get('completed', 0)}</b>\n"
-        f"❌ Отменено: <b>{stats.get('cancelled', 0)}</b>\n"
-        f"📱 Сдать номер: <b>{stats.get('sdat', 0)}</b>\n"
-        f"💰 СБП: <b>{stats.get('sbp', 0)}</b>"
-    )
-    await message.answer(stats_text, reply_markup=admin_panel_keyboard(), parse_mode="HTML")
 
 
 @router.callback_query(F.data == "admin_close")
@@ -404,5 +399,8 @@ async def admin_close(callback: CallbackQuery):
         await callback.answer("Нет прав", show_alert=True)
         return
     await callback.answer()
-    await callback.message.delete()
+    try:
+        await callback.message.delete()
+    except Exception:
+        pass
     await callback.message.answer("🔒 Панель закрыта.", reply_markup=main_menu())
