@@ -8,6 +8,7 @@ from database import get_app, update_app
 
 router = Router()
 
+
 @router.callback_query(F.data.startswith("admin_req_sbp:"))
 async def admin_request_requisites(callback: CallbackQuery, bot: Bot):
     if callback.from_user.id != ADMIN_ID:
@@ -24,17 +25,21 @@ async def admin_request_requisites(callback: CallbackQuery, bot: Bot):
     try:
         await bot.send_message(
             chat_id=target_user_id,
-            text=f"💬 <b>Администратор запросил реквизиты по заявке #{app_id}!</b>\n\nОтправьте их ответным сообщением или в поддержку.",
+            text=f"💬 <b>Администратор запросил реквизиты по заявке #{app_id}!</b>\n\nОтправьте их ответным сообщением.",
             parse_mode="HTML"
         )
     except Exception:
         pass
 
     app_data = get_app(app_id)
-    if app_data and app_data[7]: # channel_message_id
+    if app_data and app_data[7]:
         old_text = callback.message.text
         new_text = old_text.replace("Статус: ⏳ Запрос реквизитов", "Статус: 💬 Реквизиты запрашиваются")
-        await callback.message.edit_text(new_text, reply_markup=callback.message.reply_markup, parse_mode="HTML")
+        try:
+            await callback.message.edit_text(new_text, reply_markup=callback.message.reply_markup, parse_mode="HTML")
+        except Exception:
+            pass
+
 
 @router.callback_query(F.data.startswith("admin_req_code:"))
 async def admin_request_code(callback: CallbackQuery, bot: Bot):
@@ -57,6 +62,16 @@ async def admin_request_code(callback: CallbackQuery, bot: Bot):
         )
     except Exception:
         pass
+
+    app_data = get_app(app_id)
+    if app_data and app_data[7]:
+        old_text = callback.message.text
+        new_text = old_text.replace("Статус: ⏳ Ожидание запроса кода", "Статус: 📲 Код запрашивается")
+        try:
+            await callback.message.edit_text(new_text, reply_markup=callback.message.reply_markup, parse_mode="HTML")
+        except Exception:
+            pass
+
 
 @router.callback_query(F.data.startswith("admin_done:"))
 async def admin_done_app(callback: CallbackQuery, bot: Bot):
@@ -85,29 +100,67 @@ async def admin_done_app(callback: CallbackQuery, bot: Bot):
     except Exception:
         pass
 
+
+# --- ЛОГИКА ОТМЕНЫ С ПРИЧИНОЙ ---
+
 @router.callback_query(F.data.startswith("admin_cancel:"))
-async def admin_cancel_app(callback: CallbackQuery, bot: Bot):
+async def admin_cancel_prompt(callback: CallbackQuery, state: FSMContext, bot: Bot):
     if callback.from_user.id != ADMIN_ID:
         await callback.answer("❌ Доступ запрещен!", show_alert=True)
         return
 
     _, app_id_str, target_user_id_str = callback.data.split(":")
-    app_id = int(app_id_str)
-    target_user_id = int(target_user_id_str)
 
-    update_app(app_id, status="Отменено")
-    await callback.answer("❌ Заявка отменена.")
+    # Сохраняем данные заявки во временное состояние FSM
+    await state.update_data(
+        cancel_app_id=int(app_id_str),
+        cancel_user_id=int(target_user_id_str),
+        admin_message_id=callback.message.message_id
+    )
+    await state.set_state(AdminStates.waiting_cancel_reason)
 
+    await callback.answer()
+    await callback.message.answer(
+        f"❌ Введите причину отмены для заявки <b>#{app_id_str}</b> следующим сообщением:",
+        parse_mode="HTML"
+    )
+
+
+@router.message(AdminStates.waiting_cancel_reason)
+async def admin_process_cancel_reason(message: Message, state: FSMContext, bot: Bot):
+    if message.from_user.id != ADMIN_ID:
+        return
+
+    reason = message.text.strip()
+    data = await state.get_data()
+
+    app_id = data.get("cancel_app_id")
+    target_user_id = data.get("cancel_user_id")
+    admin_msg_id = data.get("admin_message_id")
+
+    update_app(app_id, status=f"Отменено: {reason}")
+    await state.clear()
+
+    # Уведомляем пользователя с указанием причины
     try:
         await bot.send_message(
             chat_id=target_user_id,
-            text=f"❌ <b>Ваша заявка #{app_id} была отменена администратором.</b>",
+            text=f"❌ <b>Ваша заявка #{app_id} была отменена администратором.</b>\n\nПричина: <i>{reason}</i>",
             parse_mode="HTML"
         )
     except Exception:
         pass
 
+    # Уведомляем админа в чате
+    await message.answer(f"✅ Причина для заявки #{app_id} успешно отправлена пользователю.")
+
+    # Обновляем сообщение в группе уведомлений
     try:
-        await callback.message.edit_text(f"❌ <b>Заявка #{app_id} ОТМЕНЕНА</b>", parse_mode="HTML")
+        await bot.edit_message_text(
+            chat_id=NOTIFY_CHANNEL_ID,
+            message_id=admin_msg_id,
+            text=f"❌ <b>Заявка #{app_id} ОТМЕНЕНА</b>\nПричина: <i>{reason}</i>",
+            parse_mode="HTML"
+        )
     except Exception:
         pass
