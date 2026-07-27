@@ -20,11 +20,27 @@ def cancel_keyboard() -> ReplyKeyboardMarkup:
     )
 
 
-def type_inline() -> InlineKeyboardMarkup:
-    """Инлайн-клавиатура выбора типа сервиса (СБП / Манимен)"""
+def main_service_menu() -> InlineKeyboardMarkup:
+    """Главный выбор категории: СБП или Номера"""
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="💳 СБП", callback_data="service_sbp")],
-        [InlineKeyboardButton(text="🏦 МАНИМЕН", callback_data="service_moneyman")]
+        [InlineKeyboardButton(text="💳 СБП", callback_data="category_sbp")],
+        [InlineKeyboardButton(text="📱 Номера (Сдать номер)", callback_data="category_numbers")]
+    ])
+
+
+def sbp_type_inline() -> InlineKeyboardMarkup:
+    """Выбор сервиса для СБП: АДЕНЬГИ или МАНИМЕН"""
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="💎 АДЕНЬГИ (СБП)", callback_data="service_sbp_adengi")],
+        [InlineKeyboardButton(text="🔥 МАНИМЕН (СБП)", callback_data="service_sbp_manimen")]
+    ])
+
+
+def numbers_type_inline() -> InlineKeyboardMarkup:
+    """Выбор сервиса для Номеров: АДЕНЬГИ или МАНИМЕН"""
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="💎 АДЕНЬГИ (Номер)", callback_data="service_num_adengi")],
+        [InlineKeyboardButton(text="🔥 МАНИМЕН (Номер)", callback_data="service_num_manimen")]
     ])
 
 
