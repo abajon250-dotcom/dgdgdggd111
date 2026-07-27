@@ -1,406 +1,198 @@
 import logging
-from aiogram import Router, F
-from aiogram.filters import Command
-from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram import Router, F, Bot
+from aiogram.types import CallbackQuery, Message
 from aiogram.fsm.context import FSMContext
-from aiogram.fsm.storage.base import StorageKey
-from aiogram import Bot
 
-from config import ADMIN_ID, NOTIFY_CHANNEL_ID
-from database import get_stats, get_apps, get_app, get_all_users, ban_user, unban_user, update_app
-from keyboards import main_menu, admin_sdat_buttons, admin_sbp_buttons, admin_sbp_confirm_buttons
-from states import AdminStates
+from config import NOTIFY_CHANNEL_ID
+from states import AdminStates, UserStates
+from keyboards import admin_sdat_buttons, user_code_prompt, main_menu
+from database import update_app, get_app, get_connection
 
 router = Router()
 logger = logging.getLogger(__name__)
 
 
-def is_admin(user_id: int) -> bool:
-    return user_id == ADMIN_ID
-
-
-def admin_panel_keyboard() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(inline_keyboard=[
-        [
-            InlineKeyboardButton(text="📋 Заявки", callback_data="admin_list_0"),
-            InlineKeyboardButton(text="📊 Статистика", callback_data="admin_stats")
-        ],
-        [
-            InlineKeyboardButton(text="🔨 Управление пользователями", callback_data="admin_users_menu"),
-        ],
-        [
-            InlineKeyboardButton(text="📨 Сделать рассылку", callback_data="admin_broadcast")
-        ],
-        [
-            InlineKeyboardButton(text="❌ Закрыть панель", callback_data="admin_close")
-        ]
-    ])
-
-
-# Добавляем кнопку админ-панели в текстовое меню для администратора
-@router.message(F.text == "👑 Админ-панель")
-@router.message(Command("admin"))
-async def admin_panel_cmd(message: Message):
-    if not is_admin(message.from_user.id):
-        await message.answer("⛔ У вас нет прав администратора.")
-        return
-    stats = get_stats()
-    text = (
-        f"👑 **Панель администратора**\n\n"
-        f"📌 Всего заявок: <b>{stats.get('total', 0)}</b>\n"
-        f"⏳ В ожидании: <b>{stats.get('waiting', 0)}</b>\n"
-        f"✅ Завершено: <b>{stats.get('completed', 0)}</b>\n"
-        f"❌ Отменено: <b>{stats.get('cancelled', 0)}</b>\n"
-        f"📱 Сдать номер: <b>{stats.get('sdat', 0)}</b>\n"
-        f"💰 СБП: <b>{stats.get('sbp', 0)}</b>"
-    )
-    await message.answer(text, reply_markup=admin_panel_keyboard(), parse_mode="HTML")
-
-
-@router.callback_query(F.data == "admin_stats")
-async def admin_stats_cb(callback: CallbackQuery):
-    if not is_admin(callback.from_user.id):
-        await callback.answer("Нет прав", show_alert=True)
-        return
-    await callback.answer()
-    stats = get_stats()
-    users_count = len(get_all_users())
-    text = (
-        f"📊 **Расширенная статистика**\n\n"
-        f"👥 Всего пользователей в базе: <b>{users_count}</b>\n"
-        f"📌 Всего заявок: <b>{stats.get('total', 0)}</b>\n"
-        f" ├ ⏳ В ожидании: <b>{stats.get('waiting', 0)}</b>\n"
-        f" ├ ✅ Завершено: <b>{stats.get('completed', 0)}</b>\n"
-        f" └ ❌ Отменено: <b>{stats.get('cancelled', 0)}</b>\n\n"
-        f"📱 Направления:\n"
-        f" ├ Сдать номер: <b>{stats.get('sdat', 0)}</b>\n"
-        f" └ СБП: <b>{stats.get('sbp', 0)}</b>"
-    )
-    back_kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="« Назад в меню", callback_data="admin_back")]
-    ])
-    await callback.message.edit_text(text, reply_markup=back_kb, parse_mode="HTML")
-
-
-@router.callback_query(F.data == "admin_back")
-async def admin_back_cb(callback: CallbackQuery):
-    if not is_admin(callback.from_user.id):
-        await callback.answer("Нет прав", show_alert=True)
-        return
-    await callback.answer()
-    stats = get_stats()
-    text = (
-        f"👑 **Панель администратора**\n\n"
-        f"📌 Всего заявок: <b>{stats.get('total', 0)}</b>\n"
-        f"⏳ В ожидании: <b>{stats.get('waiting', 0)}</b>\n"
-        f"✅ Завершено: <b>{stats.get('completed', 0)}</b>\n"
-        f"❌ Отменено: <b>{stats.get('cancelled', 0)}</b>\n"
-        f"📱 Сдать номер: <b>{stats.get('sdat', 0)}</b>\n"
-        f"💰 СБП: <b>{stats.get('sbp', 0)}</b>"
-    )
-    await callback.message.edit_text(text, reply_markup=admin_panel_keyboard(), parse_mode="HTML")
-
-
-# --- Управление пользователями ---
-
-@router.callback_query(F.data == "admin_users_menu")
-async def admin_users_menu_cb(callback: CallbackQuery):
-    if not is_admin(callback.from_user.id):
-        await callback.answer("Нет прав", show_alert=True)
-        return
-    await callback.answer()
-
-    kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🔨 Заблокировать пользователя", callback_data="admin_ban_start")],
-        [InlineKeyboardButton(text="🔓 Разблокировать пользователя", callback_data="admin_unban_start")],
-        [InlineKeyboardButton(text="« Назад в меню", callback_data="admin_back")]
-    ])
-    await callback.message.edit_text(
-        f"👥 **Управление пользователями**\n\nВыберите действие:",
-        reply_markup=kb,
-        parse_mode="HTML"
-    )
-
-
-@router.callback_query(F.data == "admin_ban_start")
-async def admin_ban_start_cb(callback: CallbackQuery, state: FSMContext):
-    if not is_admin(callback.from_user.id):
-        await callback.answer("Нет прав", show_alert=True)
-        return
-    await callback.answer()
-    await state.set_state(AdminStates.waiting_ban_id)
-
-    kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="❌ Отмена", callback_data="admin_users_menu")]
-    ])
-    await callback.message.edit_text(
-        f"🔨 Введите **Telegram ID** пользователя для блокировки:",
-        reply_markup=kb,
-        parse_mode="HTML"
-    )
-
-
-@router.message(AdminStates.waiting_ban_id)
-async def process_ban_user(message: Message, state: FSMContext):
-    if not is_admin(message.from_user.id):
-        return
-    try:
-        target_id = int(message.text.strip())
-    except ValueError:
-        await message.answer("❌ ID должен быть числом. Введите корректный ID:")
-        return
-
-    ban_user(target_id)
-    await state.clear()
-    await message.answer(f"✅ Пользователь с ID <code>{target_id}</code> заблокирован.", parse_mode="HTML")
-
-
-@router.callback_query(F.data == "admin_unban_start")
-async def admin_unban_start_cb(callback: CallbackQuery, state: FSMContext):
-    if not is_admin(callback.from_user.id):
-        await callback.answer("Нет прав", show_alert=True)
-        return
-    await callback.answer()
-    await state.set_state(AdminStates.waiting_unban_id)
-
-    kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="❌ Отмена", callback_data="admin_users_menu")]
-    ])
-    await callback.message.edit_text(
-        f"🔓 Введите **Telegram ID** пользователя для разблокировки:",
-        reply_markup=kb,
-        parse_mode="HTML"
-    )
-
-
-@router.message(AdminStates.waiting_unban_id)
-async def process_unban_user(message: Message, state: FSMContext):
-    if not is_admin(message.from_user.id):
-        return
-    try:
-        target_id = int(message.text.strip())
-    except ValueError:
-        await message.answer("❌ ID должен быть числом. Введите корректный ID:")
-        return
-
-    unban_user(target_id)
-    await state.clear()
-    await message.answer(f"✅ Пользователь с ID <code>{target_id}</code> разблокирован.", parse_mode="HTML")
-
-
-# --- Список заявок с пагинацией ---
-
-@router.callback_query(F.data.startswith("admin_list_"))
-async def admin_list_cb(callback: CallbackQuery):
-    if not is_admin(callback.from_user.id):
-        await callback.answer("Нет прав", show_alert=True)
-        return
-    await callback.answer()
-
-    offset = int(callback.data.split("_")[2])
-    limit = 8
-    apps = get_apps(limit=limit, offset=offset)
-
-    if not apps and offset == 0:
-        await callback.message.edit_text("📭 Заявок нет.", reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="« Назад", callback_data="admin_back")]
-        ]))
-        return
-
-    text = f"📋 **Список заявок (стр. {offset // limit + 1}):**\n\n"
-    keyboard_buttons = []
-    for app in apps:
-        emoji = {'waiting': '⏳', 'code_requested': '🔑', 'requisites_sent': '💳', 'amount_reported': '💰',
-                 'completed': '✅', 'cancelled': '❌'}.get(app['status'], '❓')
-        text += f"{emoji} <b>#{app['id']}</b> | {app['service_type']} | {app['type_choice']} | <code>{app['status']}</code>\n"
-        keyboard_buttons.append(InlineKeyboardButton(text=f"📄 #{app['id']}", callback_data=f"admin_view_{app['id']}"))
-
-    rows = [keyboard_buttons[i:i + 4] for i in range(0, len(keyboard_buttons), 4)]
-    nav_buttons = []
-    if offset > 0:
-        nav_buttons.append(InlineKeyboardButton(text="⬅️ Назад", callback_data=f"admin_list_{max(0, offset - limit)}"))
-    nav_buttons.append(InlineKeyboardButton(text="🔄 Обновить", callback_data=f"admin_list_{offset}"))
-    if len(apps) == limit:
-        nav_buttons.append(InlineKeyboardButton(text="Вперед ➡️", callback_data=f"admin_list_{offset + limit}"))
-
-    rows.append(nav_buttons)
-    rows.append([InlineKeyboardButton(text="« В меню админ-панели", callback_data="admin_back")])
-
-    await callback.message.edit_text(text, reply_markup=InlineKeyboardMarkup(inline_keyboard=rows), parse_mode="HTML")
-
-
-@router.callback_query(F.data.startswith("admin_view_"))
-async def admin_view_callback(callback: CallbackQuery):
-    if not is_admin(callback.from_user.id):
-        await callback.answer("Нет прав", show_alert=True)
-        return
-    await callback.answer()
-
-    app_id = int(callback.data.split("_")[2])
-    app = get_app(app_id)
-    if not app:
-        await callback.answer("❌ Заявка не найдена.", show_alert=True)
-        return
-
-    text = (
-        f"📄 **Заявка #{app['id']}**\n"
-        f"👤 Пользователь: @{app['username']} (ID: <code>{app['user_id']}</code>)\n"
-        f"📱 Услуга: <b>{app['service_type']}</b>\n"
-        f"🔘 Тип: <b>{app['type_choice']}</b>\n"
-        f"📞 Телефон: <code>{app['phone'] or '—'}</code>\n"
-        f"📊 Статус: <code>{app['status']}</code>\n"
-        f"🕐 Создана: {app['created_at']}\n"
-    )
-    if app['code']:
-        text += f"🔑 Код: <b>{app['code']}</b>\n"
-    if app['sbp_amount']:
-        text += f"💰 Сумма СБП: <b>{app['sbp_amount']}</b>\n"
-    if app['sbp_requisites']:
-        text += f"💳 Реквизиты: <code>{app['sbp_requisites']}</code>\n"
-    if app['cancel_reason']:
-        text += f"❌ Причина отмены: <i>{app['cancel_reason']}</i>"
-
-    # Добавляем интерактивные кнопки управления прямо из меню просмотра заявки
-    if app['service_type'] == 'sdat':
-        kb_actions = admin_sdat_buttons(app['id'], app['user_id'])
-    else:
-        kb_actions = admin_sbp_buttons(app['id'], app['user_id'])
-
-    rows = kb_actions.inline_keyboard + [[InlineKeyboardButton(text="« К списку заявок", callback_data="admin_list_0")]]
-    await callback.message.edit_text(text, reply_markup=InlineKeyboardMarkup(inline_keyboard=rows), parse_mode="HTML")
-
-
-# --- Универсальный обработчик отмены заявок из канала/личчки ---
-
-@router.callback_query(
-    F.data.startswith("sdat_cancel_") | F.data.startswith("sbp_cancel_") | F.data.startswith("sbp_cancel_confirm_"))
-async def universal_cancel_start(callback: CallbackQuery, state: FSMContext):
-    if not is_admin(callback.from_user.id):
-        await callback.answer("Нет прав", show_alert=True)
-        return
-    await callback.answer()
-
+# 1. Кнопка «Запросить код»
+@router.callback_query(F.data.startswith("sdat_code_"))
+async def sdat_request_code(callback: CallbackQuery, state: FSMContext, bot: Bot):
+    await callback.answer("Код запрошен!")
     parts = callback.data.split("_")
-    # Извлекаем app_id и user_id в зависимости от структуры callback_data
-    if "confirm" in callback.data:
-        app_id = int(parts[3])
-        user_id = int(parts[4])
-    else:
-        app_id = int(parts[2])
-        user_id = int(parts[3])
-
-    await state.set_state(AdminStates.waiting_cancel_reason)
-    await state.update_data(cancel_app_id=app_id, cancel_user_id=user_id)
-
-    await callback.message.answer(f"❌ Введите причину отмены для заявки #{app_id}:")
-
-
-@router.message(AdminStates.waiting_cancel_reason)
-async def admin_cancel_reason_finish(message: Message, state: FSMContext, bot: Bot):
-    if not is_admin(message.from_user.id):
-        return
-
-    reason = message.text
-    data = await state.get_data()
-    app_id = data.get('cancel_app_id')
-    user_id = data.get('cancel_user_id')
-
-    if not app_id or not user_id:
-        await message.answer("⚠️ Ошибка контекста заявки. Попробуйте отменить через список.")
-        await state.clear()
-        return
+    app_id = int(parts[2])
+    user_id = int(parts[3])
 
     app = get_app(app_id)
-    update_app(app_id, status='cancelled', cancel_reason=reason)
+    if not app or app['status'] == 'cancelled':
+        await callback.message.answer("❌ Заявка не найдена или отменена.")
+        return
 
-    # Уведомляем пользователя
+    new_count = app.get('code_requests_count', 0) + 1
+    update_app(app_id, code_requests_count=new_count)
+
     try:
-        await bot.send_message(user_id,
-                               f"❌ Ваша заявка (ID: {app_id}) была отменена администратором.\nПричина: {reason}")
+        await bot.send_message(
+            user_id,
+            f"🔑 Поступил запрос кода (попытка {new_count}). Нажмите «Ввести код»:",
+            reply_markup=user_code_prompt()
+        )
+    except Exception as e:
+        logger.error(f"Не удалось отправить сообщение пользователю: {e}")
+
+    # Обновляем стейт пользователя
+    from aiogram.fsm.storage.base import StorageKey
+    storage_key = StorageKey(bot.id, user_id, user_id)
+    await state.storage.set_state(key=storage_key, state=UserStates.sdat_code_prompt)
+    await state.storage.set_data(key=storage_key, data={'app_id': app_id})
+
+    channel_alert_text = f"🔑 Код запрошен (заявка #{app_id}) — попытка {new_count}"
+    kb = admin_sdat_buttons(app_id, user_id)
+
+    try:
+        await bot.send_message(chat_id=NOTIFY_CHANNEL_ID, text=channel_alert_text, reply_markup=kb)
+    except Exception as e:
+        logger.error(f"Не удалось отправить сообщение в канал: {e}")
+
+    try:
+        await callback.message.edit_reply_markup(reply_markup=kb)
     except Exception:
         pass
 
-    cancel_text = f"❌ Заявка #{app_id} отменена.\nПричина: {reason}"
 
-    # Обновляем сообщение в канале уведомлений, если оно есть
-    if app and app.get('channel_message_id'):
+# 2. Кнопка «Завершить»
+@router.callback_query(F.data.startswith("sdat_complete_"))
+async def sdat_admin_complete(callback: CallbackQuery, bot: Bot):
+    await callback.answer("Заявка завершена!")
+    parts = callback.data.split("_")
+    app_id = int(parts[2])
+    user_id = int(parts[3])
+
+    app = get_app(app_id)
+    if not app:
+        await callback.message.answer("❌ Заявка не найдена.")
+        return
+
+    update_app(app_id, status='completed')
+    completed_text = f"✅ <b>Заявка #{app_id} успешно завершена администратором!</b>"
+
+    try:
+        await bot.send_message(user_id, completed_text, parse_mode="HTML")
+    except Exception:
+        pass
+
+    if app.get('channel_message_id'):
         try:
             await bot.edit_message_text(
                 chat_id=NOTIFY_CHANNEL_ID,
                 message_id=app['channel_message_id'],
-                text=cancel_text
+                text=completed_text,
+                parse_mode="HTML"
             )
         except Exception:
+            pass
+
+    try:
+        await callback.message.edit_reply_markup(reply_markup=None)
+    except Exception:
+        pass
+
+
+# 3. Кнопка «Отменить заявку» (Переводит админа в режим ожидания причины в ЛС)
+@router.callback_query(F.data.startswith("sdat_cancel_"))
+async def sdat_admin_cancel_click(callback: CallbackQuery, state: FSMContext):
+    await callback.answer()
+    parts = callback.data.split("_")
+    app_id = int(parts[2])
+    user_id = int(parts[3])
+
+    await state.set_state(AdminStates.waiting_cancel_reason)
+    await state.update_data(cancel_app_id=app_id, cancel_user_id=user_id)
+    await callback.message.answer("❌ Введите причину отмены заявки:")
+
+
+# 4. Ввод причины в ЛС бота (если админ нажал кнопку и пишет боту)
+@router.message(AdminStates.waiting_cancel_reason, F.chat.type == "private")
+async def process_cancel_reason_private(message: Message, state: FSMContext, bot: Bot):
+    reason = message.text.strip()
+    data = await state.get_data()
+    app_id = data.get("cancel_app_id")
+    user_id = data.get("cancel_user_id")
+
+    if app_id:
+        update_app(app_id, status='cancelled', cancel_reason=reason)
+        app = get_app(app_id)
+
+        cancel_text = f"❌ <b>Заявка #{app_id} отменена администратором.</b>\nПричина: {reason}"
+
+        try:
+            await bot.send_message(user_id, cancel_text, parse_mode="HTML")
+        except Exception:
+            pass
+
+        if app and app.get('channel_message_id'):
             try:
-                await bot.send_message(NOTIFY_CHANNEL_ID, cancel_text)
+                await bot.edit_message_text(
+                    chat_id=NOTIFY_CHANNEL_ID,
+                    message_id=app['channel_message_id'],
+                    text=cancel_text,
+                    parse_mode="HTML"
+                )
             except Exception:
                 pass
 
     await state.clear()
-    await message.answer(f"✅ Заявка #{app_id} успешно отменена.", reply_markup=admin_panel_keyboard())
+    await message.answer("✅ Заявка успешно отменена.", reply_markup=main_menu())
 
 
-# --- Рассылка ---
-
-@router.callback_query(F.data == "admin_broadcast")
-async def admin_broadcast(callback: CallbackQuery, state: FSMContext):
-    if not is_admin(callback.from_user.id):
-        await callback.answer("Нет прав", show_alert=True)
-        return
-    await callback.answer()
-    await state.set_state(AdminStates.waiting_broadcast)
-
-    cancel_kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="❌ Отменить рассылку", callback_data="admin_back")]
-    ])
-    await callback.message.edit_text(
-        f"📨 **Массовая рассылка**\n\nВведите текст сообщения для отправки всем пользователям:",
-        reply_markup=cancel_kb,
-        parse_mode="HTML"
-    )
-
-
-@router.message(AdminStates.waiting_broadcast)
-async def broadcast_send(message: Message, state: FSMContext, bot: Bot):
-    if not is_admin(message.from_user.id):
-        await state.clear()
+# 5. НОВОЕ: Отмена прямо из ТГК через Reply (ответ на сообщение заявки в канале)
+@router.message(
+    F.chat.id.in_({int(NOTIFY_CHANNEL_ID) if str(NOTIFY_CHANNEL_ID).lstrip('-').isdigit() else NOTIFY_CHANNEL_ID}))
+async def cancel_from_channel_reply(message: Message, bot: Bot):
+    # Проверяем, что админ ответил (реплайнул) на какое-то сообщение в канале
+    if not message.reply_to_message:
         return
 
-    text = message.text
-    users = get_all_users()
-    if not users:
-        await message.answer("📭 Нет пользователей для рассылки.")
-        await state.clear()
+    replied_msg_id = message.reply_to_message.message_id
+    reason = message.text.strip()
+
+    # Ищем в базе заявку, у которой channel_message_id равен ID сообщения, на которое ответили
+    with get_connection() as conn:
+        conn.row_factory = sqlite3.Row if 'sqlite3' in globals() else None
+        # Простой поиск по таблице applications
+        cursor = conn.cursor() if hasattr(conn, 'cursor') else conn
+        cursor.execute("SELECT * FROM applications WHERE channel_message_id = ?", (replied_msg_id,))
+        row = cursor.fetchone()
+
+    if not row:
         return
 
-    sent = 0
-    blocked = 0
-    for uid in users:
-        try:
-            await bot.send_message(uid, text)
-            sent += 1
-        except Exception:
-            blocked += 1
+    # Превращаем row в словарь (на случай если row_factory не сработал)
+    app = dict(row) if not isinstance(row, dict) else row
+    app_id = app['id']
+    user_id = app['user_id']
 
-    await state.clear()
-    await message.answer(
-        f"✅ **Рассылка завершена!**\n\n"
-        f"📬 Доставлено: <b>{sent}</b>\n"
-        f"🚫 Заблокировали бота: <b>{blocked}</b>\n"
-        f"👥 Всего в базе: <b>{len(users)}</b>",
-        parse_mode="HTML",
-        reply_markup=admin_panel_keyboard()
-    )
+    # Обновляем статус в БД
+    update_app(app_id, status='cancelled', cancel_reason=reason)
 
+    cancel_text = f"❌ <b>Заявка #{app_id} отменена администратором.</b>\nПричина: {reason}"
 
-@router.callback_query(F.data == "admin_close")
-async def admin_close(callback: CallbackQuery):
-    if not is_admin(callback.from_user.id):
-        await callback.answer("Нет прав", show_alert=True)
-        return
-    await callback.answer()
+    # Уведомляем пользователя
     try:
-        await callback.message.delete()
+        await bot.send_message(user_id, cancel_text, parse_mode="HTML")
     except Exception:
         pass
-    await callback.message.answer("🔒 Панель закрыта.", reply_markup=main_menu())
+
+    # Редактируем оригинальное сообщение в канале
+    try:
+        await bot.edit_message_text(
+            chat_id=NOTIFY_CHANNEL_ID,
+            message_id=replied_msg_id,
+            text=cancel_text,
+            parse_mode="HTML"
+        )
+    except Exception as e:
+        logger.error(f"Не удалось обновить сообщение в канале: {e}")
+
+    # Удаляем сообщение с причиной от админа в канале, чтобы не засорять чат
+    try:
+        await message.delete()
+    except Exception:
+        pass
