@@ -9,6 +9,7 @@ from database import create_application, update_app
 router = Router()
 logger = logging.getLogger(__name__)
 
+
 # Открытие подменю СБП
 @router.callback_query(F.data == "category_sbp")
 async def process_sbp_category(callback: CallbackQuery):
@@ -18,13 +19,14 @@ async def process_sbp_category(callback: CallbackQuery):
         reply_markup=sbp_type_inline()
     )
 
+
 # Моментальное создание заявки при выборе сервиса СБП
 @router.callback_query(F.data.in_(["service_sbp_adengi", "service_sbp_manimen"]))
 async def process_sbp_creation(callback: CallbackQuery, bot: Bot):
     await callback.answer()
     service_name = "АДЕНЬГИ" if "adengi" in callback.data else "МАНИМЕН"
     service_type = f"{service_name} (СБП)"
-    
+
     user_id = callback.from_user.id
     username = callback.from_user.username or "отсутствует"
 
@@ -57,7 +59,7 @@ async def process_sbp_creation(callback: CallbackQuery, bot: Bot):
         logger.error(f"Не удалось отправить заявку СБП в группу: {e}")
 
     await callback.message.edit_text(
-        f"✅ <b>Заявка #{app_id} успешно создана!</b>\nАдминистратор скоро запросит ваши реквизиты.",
+        f"✅ <b>Заявка #{app_id} успешно создана!</b>\nАдминистратор скоро выдаст ваши реквизиты.",
         reply_markup=main_menu(),
         parse_mode="HTML"
     )
