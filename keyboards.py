@@ -12,6 +12,22 @@ def main_menu() -> ReplyKeyboardMarkup:
     )
 
 
+def cancel_keyboard() -> ReplyKeyboardMarkup:
+    """Клавиатура с кнопкой отмены действия"""
+    return ReplyKeyboardMarkup(
+        keyboard=[[KeyboardButton(text="❌ Отмена")]],
+        resize_keyboard=True
+    )
+
+
+def type_inline() -> InlineKeyboardMarkup:
+    """Инлайн-клавиатура выбора типа сервиса (АДЕНЬГИ / МАНИМЕН)"""
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="💎 АДЕНЬГИ", callback_data="type_adengi")],
+        [InlineKeyboardButton(text="🔥 МАНИМЕН", callback_data="type_manimen")]
+    ])
+
+
 def subscribe_check_keyboard(channel_url: str) -> InlineKeyboardMarkup:
     """Клавиатура проверки подписки на канал"""
     return InlineKeyboardMarkup(inline_keyboard=[
@@ -54,4 +70,20 @@ def admin_sbp_confirm_buttons(app_id: int, user_id: int) -> InlineKeyboardMarkup
             InlineKeyboardButton(text="✅ Подтвердить перевод", callback_data=f"sbp_confirm_{app_id}_{user_id}"),
             InlineKeyboardButton(text="❌ Отклонить", callback_data=f"sbp_cancel_confirm_{app_id}_{user_id}")
         ]
+    ])
+
+
+def user_code_prompt() -> InlineKeyboardMarkup:
+    """Кнопка для ввода кода пользователем"""
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="✏️ Ввести код", callback_data="user_enter_code")],
+        [InlineKeyboardButton(text="❌ Отмена", callback_data="user_cancel")]
+    ])
+
+
+def user_sbp_amount_prompt(app_id: int) -> InlineKeyboardMarkup:
+    """Кнопки отправки суммы СБП пользователем"""
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="✅ Я перевел(а) сумму", callback_data=f"sbp_amount_{app_id}")],
+        [InlineKeyboardButton(text="❌ Отмена", callback_data="user_cancel")]
     ])
