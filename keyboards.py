@@ -20,6 +20,14 @@ def cancel_keyboard() -> ReplyKeyboardMarkup:
     )
 
 
+def type_inline() -> InlineKeyboardMarkup:
+    """Старая инлайн-клавиатура для совместимости с handlers/start.py"""
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="💳 СБП", callback_data="category_sbp")],
+        [InlineKeyboardButton(text="📱 Номера (Сдать номер)", callback_data="category_numbers")]
+    ])
+
+
 def main_service_menu() -> InlineKeyboardMarkup:
     """Главный выбор категории: СБП или Номера"""
     return InlineKeyboardMarkup(inline_keyboard=[
