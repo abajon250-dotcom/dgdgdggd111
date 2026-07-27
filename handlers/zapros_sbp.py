@@ -30,12 +30,13 @@ async def process_sbp_creation(callback: CallbackQuery, bot: Bot):
     user_id = callback.from_user.id
     username = callback.from_user.username or "отсутствует"
 
-    # Создаем заявку в базе данных
+    # Создаем заявку в базе данных (передаем type_choice, чтобы избежать TypeError)
     app_id = create_application(
         user_id=user_id,
         username=username,
         service_type=service_type,
-        phone="Ожидание реквизитов"
+        phone="Ожидание реквизитов",
+        type_choice="СБП"  # <--- Добавлено имя недостающего аргумента
     )
 
     text_for_group = (
@@ -59,7 +60,7 @@ async def process_sbp_creation(callback: CallbackQuery, bot: Bot):
         logger.error(f"Не удалось отправить заявку СБП в группу: {e}")
 
     await callback.message.edit_text(
-        f"✅ <b>Заявка #{app_id} успешно создана!</b>\nАдминистратор скоро выдаст ваши реквизиты.",
+        f"✅ <b>Заявка #{app_id} успешно создана!</b>\nАдминистратор скоро запросит ваши реквизиты.",
         reply_markup=main_menu(),
         parse_mode="HTML"
     )
