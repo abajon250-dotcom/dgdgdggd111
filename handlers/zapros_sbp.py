@@ -1,13 +1,15 @@
+import logging
 from aiogram import Router, F, Bot
-from aiogram.types import CallbackQuery, Message
-from aiogram.fsm.context import FSMContext
+from aiogram.types import CallbackQuery
+
 from config import NOTIFY_CHANNEL_ID
 from keyboards import sbp_type_inline, admin_sbp_buttons, main_menu
+from database import create_application, update_app
 
 router = Router()
+logger = logging.getLogger(__name__)
 
-
-# Клик по кнопке "СБП" в главном меню
+# Открытие подменю СБП
 @router.callback_query(F.data == "category_sbp")
 async def process_sbp_category(callback: CallbackQuery):
     await callback.answer()
@@ -16,15 +18,46 @@ async def process_sbp_category(callback: CallbackQuery):
         reply_markup=sbp_type_inline()
     )
 
-
-# Выбор Аденьги или Манимен для СБП
+# Моментальное создание заявки при выборе сервиса СБП
 @router.callback_query(F.data.in_(["service_sbp_adengi", "service_sbp_manimen"]))
-async def process_sbp_service_choice(callback: CallbackQuery, state: FSMContext):
+async def process_sbp_creation(callback: CallbackQuery, bot: Bot):
     await callback.answer()
     service_name = "АДЕНЬГИ" if "adengi" in callback.data else "МАНИМЕН"
+    service_type = f"{service_name} (СБП)"
+    
+    user_id = callback.from_user.id
+    username = callback.from_user.username or "отсутствует"
 
-    await state.update_data(service_type=service_name, category="СБП")
+    # Создаем заявку в базе данных
+    app_id = create_application(
+        user_id=user_id,
+        username=username,
+        service_type=service_type,
+        phone="Ожидание реквизитов"
+    )
+
+    text_for_group = (
+        f"📥 <b>Новая заявка СБП (ID: {app_id}):</b>\n"
+        f"Сервис: {service_type}\n"
+        f"Пользователь: @{username} (ID: {user_id})\n"
+        f"Статус: ⏳ Запрос реквизитов"
+    )
+
+    kb = admin_sbp_buttons(app_id, user_id)
+
+    try:
+        sent_msg = await bot.send_message(
+            chat_id=NOTIFY_CHANNEL_ID,
+            text=text_for_group,
+            reply_markup=kb,
+            parse_mode="HTML"
+        )
+        update_app(app_id, channel_message_id=sent_msg.message_id)
+    except Exception as e:
+        logger.error(f"Не удалось отправить заявку СБП в группу: {e}")
+
     await callback.message.edit_text(
-        f"💳 Вы выбрали: <b>{service_name} (СБП)</b>\n\nВведите номер телефона или реквизиты:",
+        f"✅ <b>Заявка #{app_id} успешно создана!</b>\nАдминистратор скоро запросит ваши реквизиты.",
+        reply_markup=main_menu(),
         parse_mode="HTML"
     )
