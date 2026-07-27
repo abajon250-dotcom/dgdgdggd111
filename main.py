@@ -6,20 +6,18 @@ from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 
-from config import BOT_TOKEN
-# Импортируем роутеры из папки handlers
+from config import TOKEN, CHANNEL_ID, ADMIN_ID
 from handlers import start, cancel, sdat_nomer, zapros_sbp, admin
 
 
 async def main():
-    # Инициализация бота с поддержкой HTML по умолчанию
     bot = Bot(
-        token=BOT_TOKEN,
+        token=TOKEN,
         default=DefaultBotProperties(parse_mode=ParseMode.HTML)
     )
     dp = Dispatcher()
 
-    # РЕГИСТРАЦИЯ РОУТЕРОВ (Если какого-то нет здесь — кнопки из него работать не будут!)
+    # Регистрация роутеров
     dp.include_router(start.router)
     dp.include_router(cancel.router)
     dp.include_router(sdat_nomer.router)
@@ -27,14 +25,11 @@ async def main():
     dp.include_router(admin.router)
 
     logging.basicConfig(level=logging.INFO, stream=sys.stdout)
-
-    # Запуск поллинга
     logger = logging.getLogger(__name__)
-    logger.info("Бот успешно запущен и готов к работе!")
+    logger.info("Бот успешно запущен и работает без ошибок!")
 
     await bot.delete_webhook(drop_pending_updates=True)
     await dp.start_polling(bot)
-
 
 if __name__ == "__main__":
     try:
