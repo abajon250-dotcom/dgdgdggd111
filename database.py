@@ -4,9 +4,12 @@ from typing import Optional, List, Dict
 DB_NAME = "bot_data.db"
 
 def get_connection():
-    return sqlite3.connect(DB_NAME)
+    conn = sqlite3.connect(DB_NAME)
+    conn.execute("PRAGMA journal_mode=WAL;")  # Включаем WAL-режим для стабильности и скорости
+    return conn
 
 def init_db():
+    """Инициализация базы данных и создание таблиц"""
     with get_connection() as conn:
         conn.execute("""
             CREATE TABLE IF NOT EXISTS applications (
@@ -32,6 +35,7 @@ def init_db():
             CREATE TABLE IF NOT EXISTS users (
                 user_id INTEGER PRIMARY KEY,
                 username TEXT,
+                full_name TEXT,
                 is_banned INTEGER DEFAULT 0,
                 first_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -46,42 +50,65 @@ def init_db():
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
+        conn.commit()
 
-def add_user(user_id: int, username: str = None):
+def add_user(user_id: int, username: str = None, full_name: str = None):
+    """Добавление или обновление пользователя в базе"""
     with get_connection() as conn:
         conn.execute(
-            "INSERT OR IGNORE INTO users (user_id, username, is_banned) VALUES (?, ?, 0)",
-            (user_id, username)
+            """
+            INSERT INTO users (user_id, username, full_name, is_banned) 
+            VALUES (?, ?, ?, 0)
+            ON CONFLICT(user_id) DO UPDATE SET
+                username = COALESCE(?, username),
+                full_name = COALESCE(?, full_name),
+                last_seen = CURRENT_TIMESTAMP
+            """,
+            (user_id, username, full_name, username, full_name)
         )
-        conn.execute(
-            "UPDATE users SET last_seen = CURRENT_TIMESTAMP, username = COALESCE(?, username) WHERE user_id = ?",
-            (username, user_id)
-        )
+        conn.commit()
+
+def get_user_banned(user_id: int) -> bool:
+    """Проверка, заблокирован ли пользователь"""
+    with get_connection() as conn:
+        row = conn.execute("SELECT is_banned FROM users WHERE user_id = ?", (user_id,)).fetchone()
+        if row is None:
+            return False
+        return bool(row[0])
 
 def get_all_users() -> List[int]:
+    """Получение списка ID всех незаблокированных пользователей"""
     with get_connection() as conn:
-        # Выбираем только тех, кто не заблокирован
         rows = conn.execute("SELECT user_id FROM users WHERE is_banned = 0").fetchall()
         return [row[0] for row in rows]
 
 def ban_user(user_id: int):
+    """Блокировка пользователя"""
     with get_connection() as conn:
         conn.execute("UPDATE users SET is_banned = 1 WHERE user_id = ?", (user_id,))
+        conn.commit()
 
 def unban_user(user_id: int):
+    """Разблокировка пользователя"""
     with get_connection() as conn:
         conn.execute("UPDATE users SET is_banned = 0 WHERE user_id = ?", (user_id,))
+        conn.commit()
 
 def create_application(user_id: int, username: str, phone: Optional[str], service_type: str, type_choice: str) -> int:
+    """Создание новой заявки"""
     with get_connection() as conn:
         cursor = conn.execute(
-            "INSERT INTO applications (user_id, username, phone, service_type, type_choice, status, code_requests_count) "
-            "VALUES (?, ?, ?, ?, ?, 'waiting', 0)",
+            """
+            INSERT INTO applications (user_id, username, phone, service_type, type_choice, status, code_requests_count) 
+            VALUES (?, ?, ?, ?, ?, 'waiting', 0)
+            """,
             (user_id, username, phone, service_type, type_choice)
         )
+        conn.commit()
         return cursor.lastrowid
 
 def update_app(app_id: int, **kwargs):
+    """Динамическое обновление полей заявки"""
     fields = []
     values = []
     for key, value in kwargs.items():
@@ -95,14 +122,17 @@ def update_app(app_id: int, **kwargs):
             f"UPDATE applications SET updated_at = CURRENT_TIMESTAMP, {', '.join(fields)} WHERE id = ?",
             values
         )
+        conn.commit()
 
 def get_app(app_id: int) -> Optional[Dict]:
+    """Получение заявки по ID в виде словаря"""
     with get_connection() as conn:
         conn.row_factory = sqlite3.Row
         row = conn.execute("SELECT * FROM applications WHERE id = ?", (app_id,)).fetchone()
         return dict(row) if row else None
 
 def get_apps(limit: int = 20, offset: int = 0) -> List[Dict]:
+    """Получение списка заявок с пагинацией"""
     with get_connection() as conn:
         conn.row_factory = sqlite3.Row
         rows = conn.execute(
@@ -112,6 +142,7 @@ def get_apps(limit: int = 20, offset: int = 0) -> List[Dict]:
         return [dict(row) for row in rows]
 
 def get_stats() -> Dict:
+    """Получение общей статистики по заявкам"""
     with get_connection() as conn:
         total = conn.execute("SELECT COUNT(*) FROM applications").fetchone()[0]
         waiting = conn.execute("SELECT COUNT(*) FROM applications WHERE status = 'waiting'").fetchone()[0]
@@ -128,4 +159,5 @@ def get_stats() -> Dict:
             "sbp": sbp
         }
 
+# Автоматически инициализируем базу данных при импорте модуля
 init_db()
