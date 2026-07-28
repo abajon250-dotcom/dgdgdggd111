@@ -21,7 +21,7 @@ async def my_apps(message: Message):
     await message.answer(text, parse_mode="HTML")
 
 
-@router.message(F.text & ~F.text.startswith("/"))
+@router.message(F.chat.type == "private", F.text & ~F.text.startswith("/"))
 async def forward_data(message: Message, bot: Bot):
     if message.text in ["➕ Создать заявку", "📂 Мои заявки", "📞 Поддержка", "👑 Админ-панель"]:
         return
