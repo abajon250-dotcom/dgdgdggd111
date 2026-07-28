@@ -21,3 +21,4 @@ class AdminStates(StatesGroup):
     waiting_ban_id = State()
     waiting_unban_id = State()
     waiting_cancel_reason = State()
+    waiting_sbp_details = State()
