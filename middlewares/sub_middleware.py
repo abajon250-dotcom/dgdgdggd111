@@ -16,8 +16,10 @@ class SubscriptionMiddleware(BaseMiddleware):
         if not user:
             return await handler(event, data)
 
-        if isinstance(event, Message) and event.text and event.text.startswith("/start"):
-            return await handler(event, data)
+        # Отладка в консоль: видим кто и что пишет
+        print(f"[DEBUG] Проверка подписки для пользователя ID: {user.id}")
+
+        # Пропускаем кнопку проверки подписки
         if isinstance(event, CallbackQuery) and event.data == "check_sub":
             return await handler(event, data)
 
@@ -25,13 +27,17 @@ class SubscriptionMiddleware(BaseMiddleware):
 
         try:
             member = await bot.get_chat_member(chat_id=CHANNEL_ID, user_id=user.id)
+            print(f"[DEBUG] Статус пользователя в канале {CHANNEL_ID}: {member.status}")
+
+            # Если не подписан
             if member.status not in ["creator", "administrator", "member"]:
                 text = f"❌ Чтобы пользоваться ботом, подпишитесь на наш канал: {CHANNEL_ID}"
                 if isinstance(event, Message):
                     await event.answer(text, reply_markup=sub_check_keyboard(CHANNEL_ID))
                 elif isinstance(event, CallbackQuery):
                     await event.answer("❌ Сначала подпишитесь на канал!", show_alert=True)
-                return
+                return  # Блокируем выполнение дальше
+
         except Exception as e:
             print(f"[CRITICAL MIDDLEWARE ERROR] Ошибка проверки подписки: {e}")
             if isinstance(event, Message):
