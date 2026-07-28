@@ -11,7 +11,7 @@ router = Router()
 async def cmd_start(message: Message, bot: Bot):
     add_user(message.from_user.id, message.from_user.username or "нет")
     is_admin = (message.from_user.id == ADMIN_ID)
-    await message.answer(f"👋 Привет, {message.from_user.first_name}!\nДобро пожаловать в сервисный бот.", reply_markup=main_menu(is_admin))
+    await message.answer(f"👋 Привет, {message.from_user.first_name}!\nДобро пожаловать в бот.", reply_markup=main_menu(is_admin))
 
 @router.callback_query(F.data == "check_sub")
 async def verify_sub(callback: CallbackQuery, bot: Bot):

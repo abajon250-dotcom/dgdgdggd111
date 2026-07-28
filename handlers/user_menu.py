@@ -8,7 +8,7 @@ router = Router()
 
 @router.message(F.text == "📞 Поддержка")
 async def support(message: Message):
-    await message.answer("📞 По всем вопросам обращайтесь в поддержку: @admin")
+    await message.answer("📞 По всем вопросам обращайтесь в поддержку: @zekuwo или @bifuwa")
 
 
 @router.message(F.text == "📂 Мои заявки")
