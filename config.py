@@ -6,11 +6,9 @@ load_dotenv()
 BOT_TOKEN = os.getenv("TOKEN")
 ADMIN_ID = int(os.getenv("ADMIN_ID", 0))
 
-raw_channel = os.getenv("NOTIFY_CHANNEL_ID") or os.getenv("CHANNEL_ID")
-try:
-    NOTIFY_CHANNEL_ID = int(raw_channel)
-except (ValueError, TypeError):
-    NOTIFY_CHANNEL_ID = raw_channel
+# Приватный канал для уведомлений (куда падают заявки)
+raw_notify = os.getenv("NOTIFY_CHANNEL_ID")
+NOTIFY_CHANNEL_ID = int(raw_notify) if raw_notify and raw_notify.lstrip("-").isdigit() else raw_notify
 
-channel_env = os.getenv("CHANNEL_ID", "@channel")
-CHANNEL_USERNAME = channel_env if channel_env.startswith("@") else "@channel"
+# Публичный канал для проверки подписки пользователей
+CHANNEL_USERNAME = os.getenv("CHANNEL_ID", "@jgsjgjjgd")
