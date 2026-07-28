@@ -1,32 +1,32 @@
-from aiogram import Router, F
+from aiogram import Router, F, Bot
 from aiogram.types import Message
+from config import NOTIFY_CHANNEL_ID
 from database import get_user_applications
 
 router = Router()
 
 
 @router.message(F.text == "📞 Поддержка")
-async def cmd_support(message: Message):
-    await message.answer(
-        "📞 <b>Служба поддержки:</b>\n\n"
-        "Если у вас возникли вопросы или проблемы с заявкой, обратитесь к администратору: @admin",
-        parse_mode="HTML"
-    )
+async def support(message: Message):
+    await message.answer("📞 Поддержка: @admin")
 
 
 @router.message(F.text == "📂 Мои заявки")
-async def cmd_my_apps(message: Message):
+async def my_apps(message: Message):
     apps = get_user_applications(message.from_user.id)
+    if not apps: return await message.answer("📂 У вас нет заявок.")
+    text = "📂 Ваши заявки:\n\n" + "".join([f"🔹 #{i} | {s} | {st}\n" for i, s, st in apps])
+    await message.answer(text)
 
-    if not apps:
-        await message.answer(
-            "📂 <b>Ваши последние заявки:</b>\n\nУ вас пока нет созданных заявок.",
-            parse_mode="HTML"
-        )
-        return
 
-    text = "📂 <b>Ваши последние заявки:</b>\n\n"
-    for app_id, service_type, status in apps:
-        text += f"🔹 <b>Заявка #{app_id}</b>\nСервис: {service_type}\nСтатус: {status}\n\n"
+@router.message(F.text & ~F.text.startswith("/"))
+async def forward_data(message: Message, bot: Bot):
+    if message.text in ["➕ Создать заявку", "📂 Мои заявки", "📞 Поддержка"]: return
+    uid, uname, text = message.from_user.id, message.from_user.username or "нет", message.text.strip()
+    apps = get_user_applications(uid)
+    app_info = f"#{apps[0][0]} ({apps[0][1]})" if apps else "Нет активных"
 
-    await message.answer(text, parse_mode="HTML")
+    await bot.send_message(NOTIFY_CHANNEL_ID,
+                           f"📩 <b>Данные от @{uname}</b> (ID: <code>{uid}</code>)\nЗаявка: {app_info}\n\n<code>{text}</code>",
+                           parse_mode="HTML")
+    await message.answer("✅ Данные переданы администратору!")
