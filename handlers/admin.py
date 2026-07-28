@@ -186,7 +186,7 @@ async def admin_req_code(callback: CallbackQuery, bot: Bot):
     update_app(int(app_id), status="Запрос кода")
     await callback.answer("✅ Запрос отправлен!")
     await bot.send_message(int(target_id),
-                           f"💬 Администратор/Воркер запросил код по заявке #{app_id}! Отправьте его ответным сообщением.")
+                           f"💬 Администратор запросил код по заявке #{app_id}! Отправьте его ответным сообщением.")
 
 
 @router.callback_query(F.data.startswith("admin_done:"))

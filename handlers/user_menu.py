@@ -6,12 +6,12 @@ from database import get_user_applications
 router = Router()
 
 
-@router.message(F.text == "📞 Поддержка")
+@router.message(F.chat.type == "private", F.text == "📞 Поддержка")
 async def support(message: Message):
     await message.answer("📞 По всем вопросам обращайтесь в поддержку: @zekuwo или @bifuwa")
 
 
-@router.message(F.text == "📂 Мои заявки")
+@router.message(F.chat.type == "private", F.text == "📂 Мои заявки")
 async def my_apps(message: Message):
     apps = get_user_applications(message.from_user.id)
     if not apps:
