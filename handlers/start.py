@@ -16,22 +16,24 @@ async def check_sub(bot: Bot, user_id: int) -> bool:
 @router.message(Command("start"))
 async def cmd_start(message: Message, bot: Bot):
     if not await check_sub(bot, message.from_user.id):
-        return await message.answer("❌ Подпишитесь на канал!", reply_markup=sub_check_keyboard(CHANNEL_USERNAME))
+        return await message.answer("❌ Чтобы пользоваться ботом, подпишитесь на канал!", reply_markup=sub_check_keyboard(CHANNEL_USERNAME))
     await message.answer(f"👋 Привет, {message.from_user.first_name}!", reply_markup=main_menu())
 
 @router.callback_query(F.data == "check_sub")
 async def verify_sub(callback: CallbackQuery, bot: Bot):
     if not await check_sub(bot, callback.from_user.id):
-        return await callback.answer("❌ Вы не подписаны!", show_alert=True)
+        return await callback.answer("❌ Вы всё еще не подписаны на канал!", show_alert=True)
     await callback.message.delete()
     await callback.message.answer("✅ Подписка подтверждена!", reply_markup=main_menu())
 
 @router.message(F.text == "➕ Создать заявку")
 async def create_app(message: Message, bot: Bot):
     if not await check_sub(bot, message.from_user.id):
-        return await message.answer("❌ Нужна подписка!", reply_markup=sub_check_keyboard(CHANNEL_USERNAME))
+        return await message.answer("❌ Для создания заявки необходима подписка на канал!", reply_markup=sub_check_keyboard(CHANNEL_USERNAME))
     await message.answer("📂 Выберите категорию:", reply_markup=main_service_menu())
 
 @router.callback_query(F.data == "back_to_main_menu")
-async def back_menu(callback: CallbackQuery):
+async def back_menu(callback: CallbackQuery, bot: Bot):
+    if not await check_sub(bot, callback.from_user.id):
+        return await callback.message.edit_text("❌ Нужна подписка на канал!", reply_markup=sub_check_keyboard(CHANNEL_USERNAME))
     await callback.message.edit_text("📂 Выберите категорию:", reply_markup=main_service_menu())

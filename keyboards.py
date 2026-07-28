@@ -61,7 +61,6 @@ def admin_sdat_buttons(app_id: int, user_id: int):
         ]
     )
 
-# 👇 ЭТО ТО САМОЕ, ЧЕГО НЕ ХВАТАЛО ДЛЯ ИМПОРТА
 def admin_buttons(app_id: int, user_id: int, is_sbp: bool = False):
     if is_sbp:
         return admin_sbp_buttons(app_id, user_id)
