@@ -1,25 +1,36 @@
+import asyncio
 from aiogram import Router, F, Bot
 from aiogram.types import CallbackQuery, Message, InlineKeyboardMarkup, InlineKeyboardButton
-from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from config import ADMIN_ID, NOTIFY_CHANNEL_ID
 from states import AdminStates
-from database import update_app
+from database import update_app, get_total_users, get_total_applications, get_all_users
 
 router = Router()
 
 
-@router.message(Command("admin"))
-async def admin_panel(message: Message):
+@router.message(F.text == "👑 Админ-панель")
+async def admin_panel_button(message: Message):
     if message.from_user.id != ADMIN_ID:
         return
+
+    users_count = get_total_users()
+    apps_count = get_total_applications()
+
     keyboard = InlineKeyboardMarkup(
         inline_keyboard=[
+            [InlineKeyboardButton(text="📢 Сделать рассылку", callback_data="admin_broadcast")],
             [InlineKeyboardButton(text="📋 Инструкция админа", callback_data="admin_help")],
         ]
     )
-    await message.answer("👑 **Панель администратора**\n\nУправляйте заявками прямо из уведомлений в канале.",
-                         reply_markup=keyboard)
+
+    text = (
+        f"👑 **Панель администратора**\n\n"
+        f"👥 Всего пользователей в базе: <code>{users_count}</code>\n"
+        f"📂 Всего создано заявок: <code>{apps_count}</code>\n\n"
+        f"Управляйте заявками прямо из уведомлений в канале или используйте кнопки ниже:"
+    )
+    await message.answer(text, reply_markup=keyboard, parse_mode="HTML")
 
 
 @router.callback_query(F.data == "admin_help")
@@ -29,9 +40,45 @@ async def admin_help(callback: CallbackQuery):
     await callback.answer()
     await callback.message.answer(
         "📌 **Управление:**\n"
-        "• Кнопка СБП в канале просит вас ввести реквизиты, после чего они отправятся клиенту.\n"
-        "• Кнопка Номера запрашивает код у юзера."
+        "• Кнопка СБП в канале запрашивает реквизиты.\n"
+        "• Кнопка Номера запрашивает код у пользователя.\n"
+        "• Рассылка отправляет сообщение всем пользователям бота."
     )
+
+
+@router.callback_query(F.data == "admin_broadcast")
+async def admin_broadcast_start(callback: CallbackQuery, state: FSMContext):
+    if callback.from_user.id != ADMIN_ID:
+        return await callback.answer("❌ Запрещено!", show_alert=True)
+
+    await state.set_state(AdminStates.waiting_broadcast_text)
+    await callback.answer()
+    await callback.message.answer("📢 Введите текст рассылки для всех пользователей (поддерживает HTML):")
+
+
+@router.message(AdminStates.waiting_broadcast_text)
+async def execute_broadcast(message: Message, state: FSMContext, bot: Bot):
+    if message.from_user.id != ADMIN_ID:
+        return
+
+    text_to_broadcast = message.text
+    await state.clear()
+
+    users = get_all_users()
+    await message.answer(f"🚀 Начинаю рассылку для {len(users)} пользователей...")
+
+    success = 0
+    blocked = 0
+
+    for uid in users:
+        try:
+            await bot.send_message(uid, text_to_broadcast, parse_mode="HTML")
+            success += 1
+            await asyncio.sleep(0.05)
+        except Exception:
+            blocked += 1
+
+    await message.answer(f"✅ **Рассылка завершена!**\n\n🟢 Доставлено: {success}\n🔴 Заблокировали бота: {blocked}")
 
 
 @router.callback_query(F.data.startswith("admin_req_sbp:"))

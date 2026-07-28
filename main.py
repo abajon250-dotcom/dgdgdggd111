@@ -20,7 +20,7 @@ async def main():
         dp.include_router(r)
 
     logging.basicConfig(level=logging.INFO, stream=sys.stdout)
-    print("Бот полностью запущен и готов к работе!")
+    print("Бот запущен!")
     await bot.delete_webhook(drop_pending_updates=True)
     await dp.start_polling(bot)
 

@@ -12,4 +12,3 @@ NOTIFY_CHANNEL_ID = int(raw_notify) if raw_notify and raw_notify.lstrip("-").isd
 
 # Публичный канал для проверки подписки
 CHANNEL_ID = os.getenv("CHANNEL_ID", "@hisexpriem")
-CHANNEL_USERNAME = CHANNEL_ID

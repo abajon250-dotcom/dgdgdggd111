@@ -23,7 +23,7 @@ async def my_apps(message: Message):
 
 @router.message(F.text & ~F.text.startswith("/"))
 async def forward_data(message: Message, bot: Bot):
-    if message.text in ["➕ Создать заявку", "📂 Мои заявки", "📞 Поддержка"]:
+    if message.text in ["➕ Создать заявку", "📂 Мои заявки", "📞 Поддержка", "👑 Админ-панель"]:
         return
     uid, uname, text = message.from_user.id, message.from_user.username or "нет", message.text.strip()
     apps = get_user_applications(uid)

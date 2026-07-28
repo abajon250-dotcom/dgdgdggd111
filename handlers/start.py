@@ -1,18 +1,22 @@
 from aiogram import Router, F, Bot
 from aiogram.types import Message, CallbackQuery
 from aiogram.filters import Command
+from config import ADMIN_ID
 from keyboards import main_menu, main_service_menu
+from database import add_user
 
 router = Router()
 
 @router.message(Command("start"))
 async def cmd_start(message: Message, bot: Bot):
-    await message.answer(f"👋 Привет, {message.from_user.first_name}!\nДобро пожаловать в сервисный бот.", reply_markup=main_menu())
+    add_user(message.from_user.id, message.from_user.username or "нет")
+    is_admin = (message.from_user.id == ADMIN_ID)
+    await message.answer(f"👋 Привет, {message.from_user.first_name}!\nДобро пожаловать в сервисный бот.", reply_markup=main_menu(is_admin))
 
 @router.callback_query(F.data == "check_sub")
 async def verify_sub(callback: CallbackQuery, bot: Bot):
-    await callback.message.delete()
-    await callback.message.answer("✅ Подписка проверена! Главное меню:", reply_markup=main_menu())
+    is_admin = (callback.from_user.id == ADMIN_ID)
+    await callback.message.answer("✅ Подписка проверена! Главное меню:", reply_markup=main_menu(is_admin))
 
 @router.message(F.text == "➕ Создать заявку")
 async def create_app(message: Message):

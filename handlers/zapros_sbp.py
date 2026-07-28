@@ -1,6 +1,6 @@
 from aiogram import Router, F, Bot
 from aiogram.types import CallbackQuery
-from config import NOTIFY_CHANNEL_ID
+from config import NOTIFY_CHANNEL_ID, ADMIN_ID
 from keyboards import sbp_type_inline, admin_buttons, main_menu
 from database import create_application, update_app
 
@@ -26,6 +26,7 @@ async def sbp_create(callback: CallbackQuery, bot: Bot):
     )
     update_app(app_id, channel_message_id=msg.message_id)
 
+    is_admin = (uid == ADMIN_ID)
     await callback.message.delete()
     await callback.message.answer(f"✅ Заявка #{app_id} успешно создана! Ожидайте реквизиты от администратора.",
-                                  reply_markup=main_menu())
+                                  reply_markup=main_menu(is_admin))

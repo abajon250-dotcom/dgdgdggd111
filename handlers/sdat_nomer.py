@@ -2,7 +2,7 @@ import re
 from aiogram import Router, F, Bot
 from aiogram.types import CallbackQuery, Message
 from aiogram.fsm.context import FSMContext
-from config import NOTIFY_CHANNEL_ID
+from config import NOTIFY_CHANNEL_ID, ADMIN_ID
 from states import UserStates
 from keyboards import numbers_type_inline, admin_buttons, main_menu
 from database import create_application, update_app
@@ -40,4 +40,5 @@ async def num_save(message: Message, state: FSMContext, bot: Bot):
     update_app(app_id, channel_message_id=msg.message_id)
 
     await state.clear()
-    await message.answer(f"✅ Заявка #{app_id} создана!", reply_markup=main_menu())
+    is_admin = (uid == ADMIN_ID)
+    await message.answer(f"✅ Заявка #{app_id} создана!", reply_markup=main_menu(is_admin))
