@@ -9,53 +9,98 @@ from database import update_app, get_total_users, get_total_applications, get_al
 router = Router()
 
 
+def get_admin_main_keyboard():
+    """Главная клавиатура админ-панели со вкладками"""
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text="📊 Статистика", callback_data="admin_tab_stats"),
+                InlineKeyboardButton(text="📢 Рассылка", callback_data="admin_tab_broadcast")
+            ],
+            [
+                InlineKeyboardButton(text="❌ Закрыть", callback_data="admin_close")
+            ]
+        ]
+    )
+
+
 @router.message(F.text == "👑 Админ-панель")
-async def admin_panel_button(message: Message):
+async def admin_panel_button(message: Message, state: FSMContext):
     if message.from_user.id != ADMIN_ID:
         return
+
+    await state.clear()
+    text = "👑 **Панель администратора**\n\nВыберите интересующий вас раздел с помощью кнопок ниже:"
+    await message.answer(text, reply_markup=get_admin_main_keyboard(), parse_mode="HTML")
+
+
+# --- ВКЛАДКА: СТАТИСТИКА ---
+@router.callback_query(F.data == "admin_tab_stats")
+async def admin_stats_tab(callback: CallbackQuery):
+    if callback.from_user.id != ADMIN_ID:
+        return await callback.answer("❌ Доступ запрещен", show_alert=True)
 
     users_count = get_total_users()
     apps_count = get_total_applications()
 
+    text = (
+        f"📊 **Статистика бота**\n\n"
+        f"👥 Всего пользователей в базе: <code>{users_count}</code>\n"
+        f"📂 Всего создано заявок: <code>{apps_count}</code>\n"
+        f"🟢 Статус системы: <b>Работает стабильно</b>"
+    )
+
     keyboard = InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text="📢 Сделать рассылку", callback_data="admin_broadcast")],
-            [InlineKeyboardButton(text="📋 Инструкция админа", callback_data="admin_help")],
+            [InlineKeyboardButton(text="⬅️ Назад в меню", callback_data="admin_tab_main")]
         ]
     )
-
-    text = (
-        f"👑 **Панель администратора**\n\n"
-        f"👥 Всего пользователей в базе: <code>{users_count}</code>\n"
-        f"📂 Всего создано заявок: <code>{apps_count}</code>\n\n"
-        f"Управляйте заявками прямо из уведомлений в канале или используйте кнопки ниже:"
-    )
-    await message.answer(text, reply_markup=keyboard, parse_mode="HTML")
+    await callback.message.edit_text(text, reply_markup=keyboard, parse_mode="HTML")
+    await callback.answer()
 
 
-@router.callback_query(F.data == "admin_help")
-async def admin_help(callback: CallbackQuery):
+# --- ВКЛАДКА: РАССЫЛКА (МЕНЮ) ---
+@router.callback_query(F.data == "admin_tab_broadcast")
+async def admin_broadcast_tab(callback: CallbackQuery, state: FSMContext):
     if callback.from_user.id != ADMIN_ID:
         return await callback.answer("❌ Доступ запрещен", show_alert=True)
-    await callback.answer()
-    await callback.message.answer(
-        "📌 **Управление:**\n"
-        "• Кнопка СБП в канале запрашивает реквизиты.\n"
-        "• Кнопка Номера запрашивает код у пользователя.\n"
-        "• Рассылка отправляет сообщение всем пользователям бота."
-    )
-
-
-@router.callback_query(F.data == "admin_broadcast")
-async def admin_broadcast_start(callback: CallbackQuery, state: FSMContext):
-    if callback.from_user.id != ADMIN_ID:
-        return await callback.answer("❌ Запрещено!", show_alert=True)
 
     await state.set_state(AdminStates.waiting_broadcast_text)
+
+    text = (
+        f"📢 **Массовая рассылка**\n\n"
+        f"Отправьте текст сообщения, которое хотите разослать всем пользователям бота.\n"
+        f"Поддерживается форматирование **HTML** (`<b>текст</b>`, `<i>текст</i>`, ссылки и т.д.)."
+    )
+
+    keyboard = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="❌ Отменить рассылку", callback_data="admin_tab_main")]
+        ]
+    )
+    await callback.message.edit_text(text, reply_markup=keyboard, parse_mode="HTML")
     await callback.answer()
-    await callback.message.answer("📢 Введите текст рассылки для всех пользователей (поддерживает HTML):")
 
 
+# --- ВОЗВРАТ В ГЛАВНОЕ МЕНЮ АДМИНКИ ---
+@router.callback_query(F.data == "admin_tab_main")
+async def admin_tab_main(callback: CallbackQuery, state: FSMContext):
+    if callback.from_user.id != ADMIN_ID:
+        return
+    await state.clear()
+
+    text = "👑 **Панель администратора**\n\nВыберите интересующий вас раздел с помощью кнопок ниже:"
+    await callback.message.edit_text(text, reply_markup=get_admin_main_keyboard(), parse_mode="HTML")
+    await callback.answer()
+
+
+@router.callback_query(F.data == "admin_close")
+async def admin_close(callback: CallbackQuery, state: FSMContext):
+    await state.clear()
+    await callback.message.delete()
+
+
+# --- ИСПОЛНЕНИЕ РАССЫЛКИ ---
 @router.message(AdminStates.waiting_broadcast_text)
 async def execute_broadcast(message: Message, state: FSMContext, bot: Bot):
     if message.from_user.id != ADMIN_ID:
@@ -65,7 +110,7 @@ async def execute_broadcast(message: Message, state: FSMContext, bot: Bot):
     await state.clear()
 
     users = get_all_users()
-    await message.answer(f"🚀 Начинаю рассылку для {len(users)} пользователей...")
+    status_msg = await message.answer(f"🚀 Начинаю рассылку для {len(users)} пользователей...")
 
     success = 0
     blocked = 0
@@ -78,8 +123,14 @@ async def execute_broadcast(message: Message, state: FSMContext, bot: Bot):
         except Exception:
             blocked += 1
 
-    await message.answer(f"✅ **Рассылка завершена!**\n\n🟢 Доставлено: {success}\n🔴 Заблокировали бота: {blocked}")
+    await status_msg.edit_text(
+        f"✅ **Рассылка завершена!**\n\n"
+        f"🟢 Успешно доставлено: {success}\n"
+        f"🔴 Заблокировали бота: {blocked}"
+    )
 
+
+# --- УПРАВЛЕНИЕ ЗАЯВКАМИ ИЗ КАНАЛА ---
 
 @router.callback_query(F.data.startswith("admin_req_sbp:"))
 async def admin_req_sbp_start(callback: CallbackQuery, state: FSMContext):
