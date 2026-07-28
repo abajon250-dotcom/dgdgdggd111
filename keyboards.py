@@ -60,3 +60,9 @@ def admin_sdat_buttons(app_id: int, user_id: int):
             [InlineKeyboardButton(text="❌ Отменить", callback_data=f"admin_cancel:{app_id}:{user_id}")]
         ]
     )
+
+# 👇 ЭТО ТО САМОЕ, ЧЕГО НЕ ХВАТАЛО ДЛЯ ИМПОРТА
+def admin_buttons(app_id: int, user_id: int, is_sbp: bool = False):
+    if is_sbp:
+        return admin_sbp_buttons(app_id, user_id)
+    return admin_sdat_buttons(app_id, user_id)
