@@ -34,7 +34,7 @@ async def admin_panel_button(message: Message, state: FSMContext):
     await message.answer(text, reply_markup=get_admin_main_keyboard(), parse_mode="HTML")
 
 
-# --- ВКЛАДКА: СТАТИСТИКА ---
+# --- ВКЛАДКА: СТАТИСТИКА (Только для админа) ---
 @router.callback_query(F.data == "admin_tab_stats")
 async def admin_stats_tab(callback: CallbackQuery):
     if callback.from_user.id != ADMIN_ID:
@@ -59,7 +59,7 @@ async def admin_stats_tab(callback: CallbackQuery):
     await callback.answer()
 
 
-# --- ВКЛАДКА: РАССЫЛКА (МЕНЮ) ---
+# --- ВКЛАДКА: РАССЫЛКА (МЕНЮ) (Только для админа) ---
 @router.callback_query(F.data == "admin_tab_broadcast")
 async def admin_broadcast_tab(callback: CallbackQuery, state: FSMContext):
     if callback.from_user.id != ADMIN_ID:
@@ -100,7 +100,7 @@ async def admin_close(callback: CallbackQuery, state: FSMContext):
     await callback.message.delete()
 
 
-# --- ИСПОЛНЕНИЕ РАССЫЛКИ ---
+# --- ИСПОЛНЕНИЕ РАССЫЛКИ (Только для админа) ---
 @router.message(AdminStates.waiting_broadcast_text)
 async def execute_broadcast(message: Message, state: FSMContext, bot: Bot):
     if message.from_user.id != ADMIN_ID:
@@ -130,13 +130,10 @@ async def execute_broadcast(message: Message, state: FSMContext, bot: Bot):
     )
 
 
-# --- УПРАВЛЕНИЕ ЗАЯВКАМИ ИЗ КАНАЛА ---
+# --- УПРАВЛЕНИЕ ЗАЯВКАМИ ИЗ ГРУППЫ (Доступно воркерам и админам) ---
 
 @router.callback_query(F.data.startswith("admin_req_sbp:"))
 async def admin_req_sbp_start(callback: CallbackQuery, state: FSMContext):
-    if callback.from_user.id != ADMIN_ID:
-        return await callback.answer("❌ Запрещено!", show_alert=True)
-
     _, app_id, target_id = callback.data.split(":")
     await state.update_data(sbp_app_id=int(app_id), sbp_target_user=int(target_id),
                             sbp_msg_id=callback.message.message_id)
@@ -148,14 +145,14 @@ async def admin_req_sbp_start(callback: CallbackQuery, state: FSMContext):
 
 @router.message(AdminStates.waiting_sbp_details)
 async def send_sbp_details_to_user(message: Message, state: FSMContext, bot: Bot):
-    if message.from_user.id != ADMIN_ID:
-        return
-
     details = message.text.strip()
     data = await state.get_data()
     app_id = data.get("sbp_app_id")
     target_user = data.get("sbp_target_user")
     channel_msg_id = data.get("sbp_msg_id")
+
+    if not app_id:
+        return  # Если состояние не относится к сбп-реквизитам
 
     await state.clear()
     update_app(app_id, status="Реквизиты отправлены")
@@ -176,7 +173,7 @@ async def send_sbp_details_to_user(message: Message, state: FSMContext, bot: Bot
         await bot.edit_message_text(
             chat_id=NOTIFY_CHANNEL_ID,
             message_id=channel_msg_id,
-            text=f"📥 <b>Заявка СБП #{app_id}</b>\nСтатус: 💳 Реквизиты отправлены администратором",
+            text=f"📥 <b>Заявка СБП #{app_id}</b>\nСтатус: 💳 Реквизиты отправлены",
             parse_mode="HTML"
         )
     except Exception:
@@ -185,19 +182,15 @@ async def send_sbp_details_to_user(message: Message, state: FSMContext, bot: Bot
 
 @router.callback_query(F.data.startswith("admin_req_code:"))
 async def admin_req_code(callback: CallbackQuery, bot: Bot):
-    if callback.from_user.id != ADMIN_ID:
-        return await callback.answer("❌ Запрещено!", show_alert=True)
     _, app_id, target_id = callback.data.split(":")
     update_app(int(app_id), status="Запрос кода")
     await callback.answer("✅ Запрос отправлен!")
     await bot.send_message(int(target_id),
-                           f"💬 Администратор запросил код по заявке #{app_id}! Отправьте его ответным сообщением.")
+                           f"💬 Администратор/Воркер запросил код по заявке #{app_id}! Отправьте его ответным сообщением.")
 
 
 @router.callback_query(F.data.startswith("admin_done:"))
 async def admin_done(callback: CallbackQuery, bot: Bot):
-    if callback.from_user.id != ADMIN_ID:
-        return await callback.answer("❌ Запрещено!", show_alert=True)
     _, app_id, target_id = callback.data.split(":")
     update_app(int(app_id), status="Завершено")
     await callback.answer("✅ Заявка закрыта!")
@@ -211,8 +204,6 @@ async def admin_done(callback: CallbackQuery, bot: Bot):
 
 @router.callback_query(F.data.startswith("admin_cancel:"))
 async def admin_cancel(callback: CallbackQuery, state: FSMContext):
-    if callback.from_user.id != ADMIN_ID:
-        return await callback.answer("❌ Запрещено!", show_alert=True)
     _, app_id, target_id = callback.data.split(":")
     await state.update_data(c_app=int(app_id), c_user=int(target_id), c_msg=callback.message.message_id)
     await state.set_state(AdminStates.waiting_cancel_reason)
@@ -222,10 +213,12 @@ async def admin_cancel(callback: CallbackQuery, state: FSMContext):
 
 @router.message(AdminStates.waiting_cancel_reason)
 async def admin_reason(message: Message, state: FSMContext, bot: Bot):
-    if message.from_user.id != ADMIN_ID:
-        return
     reason = message.text.strip()
     data = await state.get_data()
+
+    if not data.get("c_app"):
+        return
+
     update_app(data["c_app"], status=f"Отменено: {reason}")
     await state.clear()
 
