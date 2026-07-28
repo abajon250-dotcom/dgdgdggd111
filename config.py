@@ -10,5 +10,6 @@ ADMIN_ID = int(os.getenv("ADMIN_ID", 0))
 raw_notify = os.getenv("NOTIFY_CHANNEL_ID")
 NOTIFY_CHANNEL_ID = int(raw_notify) if raw_notify and raw_notify.lstrip("-").isdigit() else raw_notify
 
-# Публичный канал для проверки подписки пользователей
-CHANNEL_USERNAME = os.getenv("CHANNEL_ID", "@jgsjgjjgd")
+# Публичный канал для проверки подписки
+CHANNEL_ID = os.getenv("CHANNEL_ID", "@hisexpriem")
+CHANNEL_USERNAME = CHANNEL_ID
